@@ -16,11 +16,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.concurrent.ConcurrentNavigableMap;
 
 
 public class tachyon_vti_interface {
     private static final TachyonURI mMasterLocation = new TachyonURI("tachyon://127.0.0.1:19998/");
+    private static final int mNumbers = 20;
+    private static final TachyonURI mFilePath = new TachyonURI("/table");
+    private static WriteType mWriteType;
 
     public static void main(String[] args) {
         System.out.println("Tachyon VTI Prototype");
@@ -42,6 +48,10 @@ public class tachyon_vti_interface {
         try {
             TachyonFS tachyonClient = TachyonFS.get(mMasterLocation);
             createFile(tachyonClient);
+            writeFile(tachyonClient);
+        }
+        catch (FileAlreadyExistsException e){
+            System.out.println("Table already exists. Not doing anything.");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -49,7 +59,32 @@ public class tachyon_vti_interface {
     }
 
     private static void createFile(TachyonFS tachyonClient) throws IOException {
-        int fileId = tachyonClient.createFile("/table");
+        try {
+            int fileId = tachyonClient.createFile("/table4");
+        }
+        catch (FileAlreadyExistsException e) {
+            System.out.println("Table already exists. Nothing to do.");
+        }
+        catch (Exception e){
+            e.printStackTrace();
+        }
+
+    }
+
+    private static void writeFile(TachyonFS tachyonClient) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate(mNumbers * 4);
+        buf.order(ByteOrder.nativeOrder());
+        for (int k = 0; k < mNumbers; k ++) {
+            buf.putInt(k);
+        }
+        buf.flip();
+        buf.flip();
+        long startTimeMs = CommonUtils.getCurrentMs();
+        TachyonFile file = tachyonClient.getFile(mFilePath);
+        mWriteType = mWriteType.valueOf("MUST_CACHE");
+        OutStream os = file.getOutStream(mWriteType);
+        os.write(buf.array());
+        os.close();
     }
 
 }
