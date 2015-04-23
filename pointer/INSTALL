@@ -1,0 +1,73 @@
+/********************************************************************
+ **
+ ** BoundingBox Blade Installation Steps
+ **
+ *******************************************************************/
+
+Short-hand Names
+  $DBNAME = The name of the database you are working on
+  $INFORMIXDIR = The directory you have Informix instlled in
+
+I Compile the BoundingBox DataBlade 
+  1. Enter the 'src' directory
+  2. Determine the name of your DataBlade Development Kit makeinc file
+     located in the directory '$INFORMIXDIR/incl/dbdk/'. This file will 
+     have a name of the form: 'makeinc.<platform>'. Here are some common 
+     names:
+     For 32-bit Linux: 'makeinc.linux'
+     For 64-bit Linux: 'makeinc.linux86_64'
+  3. Using the above file name define the 'TARGET' environment variable
+     BASH: export TARGET='$INFORMIXDIR/incl/dbdk/makeinc.<platform>'
+  4. make -f boundingboxU.mak
+  5. Check link.errs for problems in the build
+
+II Copying files
+  1. su informix
+  2. mkdir $INFORMIXDIR/extend/boundingbox.0.0
+  3. cp scripts/* $INFORMIXDIR/extend/boundingbox.0.0
+  4. cp src/linux86_64 $INFORMIXDIR/extend/boundingbox.0.0
+
+III Register the BoundingBox DataBlade
+  1. su informix
+  2. blademgr
+  3. list $DBNAME
+  4. register boundingbox.0.0 $DBNAME
+
+IV Create and enable the trace class
+  1. dbaccess sysmaster -
+  2. INSERT INTO informix.systraceclasses(name) VALUES ('BoundingBox');
+  3. CREATE PROCEDURE traceset(LVARCHAR, INTEGER)
+     EXTERNAL NAME '$INFORMIXDIR/extend/boundingbox.0.0/boundingbox.bld(BoundingBoxTraceSet)'
+     LANGUAGE C;
+  4. EXECUTE PROCEDURE TRACESET('/tmp/boundingbox.trc', 40);
+
+V Create a table with the new UDT
+  1. dbaccess - -
+  2. create table bbox_tab (bbox BoundingBox);
+
+VI Create an index using the Virtual-Index Interface utilizing the R-Tree
+     Secondary access method
+  1. dbaccess - -
+  2. create index bbox_tabx on bbox_tab (bbox BoundingBox_ops) using rtree;
+  3. update statistics for table bbox_tab;
+     (No rows is fine)
+
+VII Insert values into the BoundingBox column
+  1. dbaccess - -
+  2. insert into bbox_tab values ('BoundingBox(0.0,0.0,0.0,1.0,1.0,1.0)')
+  3. update statistics for table bbox_tab;
+     (One row is also fine, but...)
+  4. insert into bbox_tab values ('BoundingBox(1.0,0.0,0.0,2.0,1.0,1.0)')
+     insert into bbox_tab values ('BoundingBox(2.0,0.0,0.0,3.0,1.0,1.0)')
+     insert into bbox_tab values ('BoundingBox(3.0,0.0,0.0,4.0,1.0,1.0)')
+  3. update statistics for table bbox_tab;
+     (More than one row in the update statistics will fail)
+
+VIII Use the operator class to query the table 
+  1. dbaccess - -
+  2. select * from bbox_tab where contains (bbox, 'BoundingBox(0.2,0.2,0.2,0.4,0.6,0.8)');
+
+IX Logfile Locations
+  1. $INFORMIXDIR/online.log
+  2. Trace file output configured with traceset
+  3. /tmp/blademgr/
