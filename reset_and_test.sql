@@ -1,13 +1,19 @@
--- Load the BSON Utilities JAR
-EXECUTE PROCEDURE sqlj.install_jar(
-"file:$INFORMIXDIR/tmp/tachyon_vti_interface.jar","informix_tachyon", 0);
-
-EXECUTE PROCEDURE sqlj.replace_jar(
-"file:$INFORMIXDIR/tmp/tachyon_vti_interface.jar", "informix_tachyon");
-
+DROP TABLE IF EXISTS vt;
+DROP ACCESS_METHOD if exists vtam restrict;
+DROP FUNCTION disconnectFromTachyon(pointer);
+DROP FUNCTION connectToTachyon(pointer);
+DROP FUNCTION createTableInTachyon(pointer);
+DROP FUNCTION deleteTableInTachyon(pointer);
+DROP FUNCTION beginScanTachyon(pointer);
+DROP FUNCTION getNextTachyon(pointer, pointer, pointer);
+DROP FUNCTION endScanTachyon(pointer);
+DROP FUNCTION insertTachyon(pointer, pointer, pointer);
+DROP FUNCTION getByte(pointer);
 
 EXECUTE PROCEDURE sqlj.remove_jar("informix_tachyon");
 
+EXECUTE PROCEDURE sqlj.install_jar(
+"file:$INFORMIXDIR/tmp/tachyon_vti_interface.jar","informix_tachyon", 0);
 
 CREATE FUNCTION disconnectFromTachyon(pointer)
 RETURNING integer
@@ -63,14 +69,23 @@ RETURNING integer
 EXTERNAL NAME 'informix_tachyon:com.ibm.TachyonVtiInterface.getByte(com.ibm.Pointer)'
 LANGUAGE java;
 
+
 CREATE PRIMARY ACCESS_METHOD vtam
-(AM_OPEN = connectToTachyon,
-AM_CLOSE = disconnectFromTachyon,
-AM_CREATE = createTableInTachyon,
-AM_DROP = deleteTableInTachyon,
-AM_GETNEXT = getNextTachyon,
-AM_INSERT = insertTachyon,
-AM_GETBYID = getByte,
+(
+--AM_CREATE = createTableInTachyon,
+--AM_OPEN = connectToTachyon,
+--AM_CLOSE = disconnectFromTachyon,
+--AM_DROP = deleteTableInTachyon,
+--AM_GETNEXT = getNextTachyon,
+--AM_INSERT = insertTachyon,
+--AM_GETBYID = getByte,
+AM_CREATE = tachyonCreate,
+AM_OPEN = tachyonOpen,
+AM_CLOSE = tachyonClose,
+AM_DROP = tachyonDrop,
+AM_GETNEXT = tachyonGetNext,
+AM_INSERT = tachyonInsert,
+AM_GETBYID = tachyonGetById,
 AM_READWRITE,
 AM_ROWIDS,
 AM_SPTYPE = 'X',
@@ -81,15 +96,3 @@ col1 INTEGER,
 col2 INTEGER)
 IN tachyon
 USING vtam;
-
-DROP TABLE IF EXISTS vt;
-DROP ACCESS_METHOD if exists vtam restrict;
-DROP FUNCTION disconnectFromTachyon(pointer);
-DROP FUNCTION connectToTachyon(pointer);
-DROP FUNCTION createTableInTachyon(pointer);
-DROP FUNCTION deleteTableInTachyon(pointer);
-DROP FUNCTION beginScanTachyon(pointer);
-DROP FUNCTION getNextTachyon(pointer, pointer, pointer);
-DROP FUNCTION endScanTachyon(pointer);
-DROP FUNCTION insertTachyon(pointer, pointer, pointer);
-DROP FUNCTION getByte(pointer);
