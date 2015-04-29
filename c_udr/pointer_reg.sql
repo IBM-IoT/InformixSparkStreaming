@@ -12,68 +12,90 @@ drop function if exists tachyonGetById(pointer);
 drop function if exists tachyonGetNext(pointer,pointer,pointer);
 drop function if exists tachyonInsert(pointer,pointer,pointer);
 
+DROP TABLE IF EXISTS vt;
+DROP ACCESS_METHOD if exists vtam1 restrict;
+
+create table vt(col1 INTEGER,
+col2 INTEGER);
+
 create function tachyonCreate(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonCreate)'
+    external name '/opt/informix/extend/c_udr.so(tachyonCreate)'
     language C;
 
 create function tachyonDrop(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonDrop)'
+    external name '/opt/informix/extend/c_udr.so(tachyonDrop)'
     language C;
 
 create function tachyonOpen(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonOpen)'
+    external name '/opt/informix/extend/c_udr.so(tachyonOpen)'
     language C;
 
 create function tachyonClose(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonClose)'
+    external name '/opt/informix/extend/c_udr.so(tachyonClose)'
     language C;
 
 create function tachyonGetById(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonGetById)'
+    external name '/opt/informix/extend/c_udr.so(tachyonGetById)'
     language C;
 
 create function tachyonGetNext(pointer,pointer,pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonGetNext)'
+    external name '/opt/informix/extend/c_udr.so(tachyonGetNext)'
     language C;
 
 create function tachyonInsert(pointer,pointer,pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/pointer.so(tachyonInsert)'
+    external name '/opt/informix/extend/c_udr.so(tachyonInsert)'
     language C;
 
 create function PointerSend(pointer)
     returns sendrecv
-    external name '/opt/informix/extend/pointer.so(PointerSend)'
+    external name '/opt/informix/extend/c_udr.so(PointerSend)'
     language C not variant;
 create explicit cast (pointer as sendrecv with PointerSend);
 
 create function PointerInput(lvarchar)
     returns Pointer
-    external name '/opt/informix/extend/pointer.so(PointerInput)'
+    external name '/opt/informix/extend/c_udr.so(PointerInput)'
     language C not variant;
 
 create function PointerOutput(pointer)
     returns lvarchar
-    external name '/opt/informix/extend/pointer.so(PointerOutput)'
+    external name '/opt/informix/extend/c_udr.so(PointerOutput)'
     language C not variant;
 
 create implicit cast (lvarchar as pointer with PointerInput);
 create explicit cast (pointer as lvarchar with PointerOutput);
 
+CREATE PRIMARY ACCESS_METHOD vtam1
+(AM_OPEN = connectToTachyon,
+AM_CLOSE = disconnectFromTachyon,
+AM_CREATE = createTableInTachyon,
+AM_DROP = deleteTableInTachyon,
+AM_GETNEXT = getNextTachyon,
+AM_INSERT = insertTachyon,
+AM_GETBYID = getByte,
+AM_READWRITE,
+AM_ROWIDS,
+AM_SPTYPE = 'X',
+AM_CLUSTER);
+
 execute function pointerinput('0x00001234');
 execute function pointerinput('0x00001234');
 execute function pointerinput('0x00001234');
 execute function pointerinput('0x1234abcd');
+
+execute function tachyonInsert('0x1234abcd', '0x1234abcd', '0x1234abcd');
+
