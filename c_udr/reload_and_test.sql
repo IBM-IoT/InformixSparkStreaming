@@ -13,10 +13,9 @@ drop function if exists tachyonGetNext(pointer,pointer,pointer);
 drop function if exists tachyonInsert(pointer,pointer,pointer);
 
 DROP TABLE IF EXISTS vt;
-DROP ACCESS_METHOD if exists vtam1 restrict;
+DROP ACCESS_METHOD if exists vtam2 restrict;
 
-create table vt(col1 INTEGER,
-col2 INTEGER);
+
 
 create function tachyonCreate(pointer)
     RETURNING INTEGER
@@ -79,18 +78,21 @@ create function PointerOutput(pointer)
 create implicit cast (lvarchar as pointer with PointerInput);
 create explicit cast (pointer as lvarchar with PointerOutput);
 
-CREATE PRIMARY ACCESS_METHOD vtam1
-(AM_OPEN = connectToTachyon,
-AM_CLOSE = disconnectFromTachyon,
-AM_CREATE = createTableInTachyon,
-AM_DROP = deleteTableInTachyon,
-AM_GETNEXT = getNextTachyon,
-AM_INSERT = insertTachyon,
-AM_GETBYID = getByte,
+CREATE PRIMARY ACCESS_METHOD vtam2
+(AM_OPEN = tachyonOpen,
+AM_CLOSE = tachyonClose,
+AM_CREATE = tachyonCreate,
+AM_DROP = tachyonDrop,
+AM_GETNEXT = tachyonGetNext,
+AM_INSERT = tachyonInsert,
+AM_GETBYID = tachyonGetByid,
 AM_READWRITE,
 AM_ROWIDS,
 AM_SPTYPE = 'X',
 AM_CLUSTER);
+
+create table vt(col1 INTEGER,
+col2 INTEGER) using vtam2;
 
 execute function pointerinput('0x00001234');
 execute function pointerinput('0x00001234');
