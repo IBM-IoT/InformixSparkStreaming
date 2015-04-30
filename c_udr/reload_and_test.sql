@@ -1,3 +1,6 @@
+DROP TABLE IF EXISTS vtam8;
+DROP ACCESS_METHOD if exists vtam8 restrict;
+
 drop cast if exists (pointer as sendrecv);
 drop cast if exists (lvarchar as pointer);
 drop cast if exists (pointer as lvarchar);
@@ -11,9 +14,6 @@ drop function if exists tachyonDrop(pointer);
 drop function if exists tachyonGetById(pointer);
 drop function if exists tachyonGetNext(pointer,pointer,pointer);
 drop function if exists tachyonInsert(pointer,pointer,pointer);
-
-DROP TABLE IF EXISTS vt;
-DROP ACCESS_METHOD if exists vtam2 restrict;
 
 
 
@@ -63,7 +63,7 @@ create function PointerSend(pointer)
     returns sendrecv
     external name '/opt/informix/extend/c_udr.so(PointerSend)'
     language C not variant;
-create explicit cast (pointer as sendrecv with PointerSend);
+
 
 create function PointerInput(lvarchar)
     returns Pointer
@@ -75,10 +75,11 @@ create function PointerOutput(pointer)
     external name '/opt/informix/extend/c_udr.so(PointerOutput)'
     language C not variant;
 
-create implicit cast (lvarchar as pointer with PointerInput);
-create explicit cast (pointer as lvarchar with PointerOutput);
+--create explicit cast (pointer as sendrecv with PointerSend);
+--create implicit cast (lvarchar as pointer with PointerInput);
+--create explicit cast (pointer as lvarchar with PointerOutput);
 
-CREATE PRIMARY ACCESS_METHOD vtam2
+CREATE PRIMARY ACCESS_METHOD vtam8
 (AM_OPEN = tachyonOpen,
 AM_CLOSE = tachyonClose,
 AM_CREATE = tachyonCreate,
@@ -91,13 +92,13 @@ AM_ROWIDS,
 AM_SPTYPE = 'X',
 AM_CLUSTER);
 
-create table vt(col1 INTEGER,
-col2 INTEGER) using vtam2;
+create table vtam8(col1 INTEGER,col2 INTEGER) using vtam8;
+insert into vtam8 values (1245, 435345) using vtam8;
 
-execute function pointerinput('0x00001234');
-execute function pointerinput('0x00001234');
-execute function pointerinput('0x00001234');
-execute function pointerinput('0x1234abcd');
+--execute function pointerinput('0x00001234');
+--execute function pointerinput('0x00001234');
+--execute function pointerinput('0x00001234');
+--execute function pointerinput('0x1234abcd');
 
-execute function tachyonInsert('0x1234abcd', '0x1234abcd', '0x1234abcd');
+--execute function tachyonInsert('0x1234abcd', '0x1234abcd', '0x1234abcd');
 
