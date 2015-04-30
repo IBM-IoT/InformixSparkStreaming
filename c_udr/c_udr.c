@@ -1,4 +1,5 @@
 #include <mi.h>
+#include <miami.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -62,6 +63,35 @@ PointerSend (mi_pointer *pointer)
 MI_DECL mi_integer
 tachyonCreate (mi_pointer *buf)
 {
+
+  FILE *f = fopen("/opt/informix/create.txt", "w");
+  if (f == NULL)
+  {
+    printf("Error opening file!\n");
+    return 1;
+  }
+
+  fprintf(f, "%lx \n", buf);
+  fprintf(f, "%lx \n", *buf);
+
+  //long *test = *buf;
+  //MI_AM_TABLE_DESC * table = *buf;
+ // fprintf(f, "%lx \n", *test);
+  /* print some text */
+  //mi_pointer *test = *buf;
+  mi_string* tableName = mi_tab_name(buf);
+  const char *text = "Write this to the file";
+  fprintf(f, "Table name: %s\n", tableName);
+  //fprintf(f, "test");
+  //fprintf(f, "%lx", *buf);
+
+  //MI_AM_TABLE_DESC test = **buf;
+
+  //fprintf(f, "3: %lx", *buf2);
+
+
+  fclose(f);
+
  /* long addrAsLong;
   char textbuf[100];
   MI_ROW *row;
