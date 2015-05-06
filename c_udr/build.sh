@@ -1,4 +1,4 @@
-gcc -fPIC -DMI_SERVBUILD -I$INFORMIXDIR/incl/public  -I$INFORMIXDIR/incl -L$INFORMIXDIR/esql/lib -c c_udr.c
+gcc -w -fPIC -DMI_SERVBUILD -I$INFORMIXDIR/incl/public  -I$INFORMIXDIR/incl -L$INFORMIXDIR/esql/lib -c c_udr.c
 
 gcc c_udr.o -shared -o c_udr.so
 

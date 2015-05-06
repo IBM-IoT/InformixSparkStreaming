@@ -135,8 +135,21 @@ tachyonDrop (mi_pointer *buf)
 
 MI_DECL mi_integer
 tachyonOpen (mi_pointer *buf)
-{
+    {
+    FILE *f = fopen("/opt/informix/open.txt", "w");
+    if (f == NULL)
+    {
+      printf("Error opening file!\n");
+      return 1;
+    }
+
+    mi_integer rows = mi_tab_setniorows(buf, 1);
+    fprintf(f, "mi_tab_setniorows return value %d\n", rows);
+
+    fclose(f);
+
   return 0;
+
 }
 
 MI_DECL mi_integer
@@ -159,29 +172,149 @@ tachyonGetNext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
 MI_DECL mi_integer
 tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
+
 {
 
 
 FILE *f = fopen("/opt/informix/file.txt", "w");
-if (f == NULL)
+  if (f == NULL)
+  {
+    printf("Error opening file!\n");
+    return -1;
+  }
+
+
+
+  //mi_integer numcols;
+  //mi_string *colname;
+
+  //numcols = mi_column_count(buf1);
+
+  //fprintf(f, "%lx  %lx", *buf0, *buf1);
+  //fprintf(f, "Number of columns: %d\n", numcols);
+/*
+  int i = 0;
+  while( i < numcols )
+  {
+    colname = mi_column_name(buf1, i);
+    fprintf(f, " %s\t", colname);
+    i++;
+  }
+*/
+
+
+//olval = NULL;
+//collen = 0;
+
+//MI_ROW_DESC *rowdesc;
+//rowdesc = mi_get_row_desc(buf1);
+
+//mi_value(*buf1, 1, &colval, &collen);
+
+/*switch( mi_value(*buf1, 1, &colval, &collen) )
 {
-  printf("Error opening file!\n");
-  return 1;
+case MI_ERROR:
+        fprintf(f, "MI_ERROR");
+case MI_NULL_VALUE:
+        fprintf(f, "MI_NULL_VALUE");
+        break;
+case MI_NORMAL_VALUE:
+        fprintf(f, "MI_NORMAL_VALUE");
+        break;
+case MI_ROW_VALUE:
+        fprintf(f, "MI_ROW_VALUE");
+        break;
+default:
+    fprintf(f, "DUNNO");
+
+    return( -1 );
+}*/
+
+
+MI_ROW *row = NULL;
+mi_integer rowid = 0;
+mi_integer fragid = 0;
+
+//fprintf(f, " %s\t", colname);
+mi_integer nrows = mi_tab_niorows(buf0);
+fprintf(f, "Number of rows: %d\n", nrows);
+
+mi_integer x = mi_tab_nextrow(buf0, &row, &rowid, &fragid);
+fprintf(f, "mi_tab_nextrow %d\n", x);
+
+
+mi_integer numcols;
+
+numcols = mi_column_count(row);
+fprintf(f, "Number of columns: %d\n", numcols);
+
+mi_string *colname;
+
+
+mi_integer collen = 0;
+MI_DATUM *colval = NULL;
+
+
+mi_integer y = mi_value(row, 0, &colval, &collen);
+
+int i = 0;
+while( i < numcols )
+{
+    colname = mi_column_name(row, i);
+    fprintf(f, " %s\t", colname);
+    i++;
 }
 
-  /* print some text */
-  const char *text = "Write this to the file";
-  //fprintf(f, "Some text: %s\n", text);
-  fprintf(f, "test");
-  //fprintf(f, "%lx  %lx", *buf0, *buf1);
-  //fprintf(f, "3: %lx", *buf2);
+
+fprintf(f, "MI_NORMAL_VALUE: %d\n", MI_NORMAL_VALUE);
+fprintf(f, "MI_ROW_VALUE: %d\n", MI_ROW_VALUE);
+fprintf(f, "value length %d\n", collen);
 
 
-  fclose(f);
 
-  //printf("%p", buf0);
+int full_int = (mi_integer) colval;
+fprintf(f, "value? %d\n", full_int);
 
-  return 42;
+y = mi_value(row, 1, &colval, &collen);
+full_int = (mi_integer) colval;
+fprintf(f, "value? %d", full_int);
+
+fclose(f);
+
+  return 0;
+}
+
+
+tachyonDelete (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
+{
+return 0;
+}
+
+tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer *buf3, mi_pointer *buf4)
+{
+
+FILE *f = fopen("/opt/informix/update.txt", "w");
+if (f == NULL)
+{
+    printf("Error opening file!\n");
+    return -1;
+}
+
+fprintf(f, "update");
+
+fclose(f);
+
+return 0;
+}
+
+tachyonEndscan (mi_pointer *buf)
+{
+return 0;
+}
+
+tachyonBeginscan (mi_pointer *buf)
+{
+return 0;
 }
 
 MI_DECL mi_pointer *
