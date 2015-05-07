@@ -1,3 +1,4 @@
+drop database if exists test42;
 create database test42;
 
 DROP INDEX IF EXISTS ix1;
@@ -129,7 +130,7 @@ create table vii(col1 INTEGER,col2 INTEGER);
 create index ix1 on vii(col1, col2) USING vii_am4;
 
 insert into vii(col1, col2) values (12456756, 435345);
-insert into vii(col1, col2) values (784566, 8768);
+--insert into vii(col1, col2) values (784566, 8768);
 
 UPDATE vii SET col1 = 99999, col2 = 11111 WHERE col1 = 12456756;
 
