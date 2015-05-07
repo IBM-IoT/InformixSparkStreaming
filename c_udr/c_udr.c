@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <errno.h>
 
 /*
  * Tracing-related macros
@@ -175,6 +176,13 @@ tachyonGetNext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
   return 0;
 }
 
+
+void error(const char *msg)
+{
+    perror(msg);
+    exit(1);
+}
+
 MI_DECL mi_integer
 tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
@@ -193,14 +201,94 @@ socklen_t clilen;
 char buffer[256];
 struct sockaddr_in serv_addr, cli_addr;
 int n;
-
+sockfd = socket(AF_INET, SOCK_STREAM, 0);
+if (sockfd < 0) fprintf(f, "Error opening socket \n");
 bzero((char *) &serv_addr, sizeof(serv_addr));
-portno = atoi("9999");
+
+
+/*
+int listenfd = 0, connfd = 0;
+struct sockaddr_in serv_addr;
+
+char sendBuff[1025];
+time_t ticks;
+
+listenfd = socket(AF_INET, SOCK_STREAM, 0);
+memset(&serv_addr, '0', sizeof(serv_addr));
+memset(sendBuff, '0', sizeof(sendBuff));
+
+serv_addr.sin_family = AF_INET;
+serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+serv_addr.sin_port = htons(5000);
+
+bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+
+listen(listenfd, 10);
+
+
+*/
+/*while(1)
+{*//*
+
+connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
+
+
+if (connfd < 0) {
+fprintf(f, "accept failed\n");
+fprintf(f, "errno: %d \n", errno);
+}
+
+ticks = time(NULL);
+//snprintf(sendBuff, sizeof(sendBuff), "%.24s\r\n", ctime(&ticks));
+write(connfd, "I got your message",18);
+
+close(connfd);
+sleep(1);
+//}
+
+*/
+
+/*
+
+*/
+
+//portno = atoi("10001");
+fprintf(f, "port number %d \n", portno);
+fprintf(f, "port number %d \n", portno);
 serv_addr.sin_family = AF_INET;
 serv_addr.sin_addr.s_addr = INADDR_ANY;
-serv_addr.sin_port = htons(portno);
+serv_addr.sin_port = htons(5002);
+fprintf(f, "addr: %l\n", serv_addr.sin_addr.s_addr);
+fprintf(f, "port: %d\n", serv_addr.sin_port);
+fprintf(f, "sockfd %d \n", sockfd);
+if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
+    fprintf(f, "Bind failed \n");
+    fprintf(f, "errno: %d \n", errno);
+}
 
-sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+listen(sockfd,5);
+clilen = sizeof(cli_addr);
+newsockfd = accept(sockfd,
+                   (struct sockaddr *) &cli_addr,
+                   &clilen);
+
+
+if (newsockfd < 0) {
+fprintf(f, "accept failed\n");
+fprintf(f, "errno: %d \n", errno);
+}
+
+bzero(buffer,256);
+
+n = write(newsockfd,"I got your message",18);
+if (n < 0) fprintf(f, "Write failed \n");;
+
+
+close(newsockfd);
+close(sockfd);
+
+
 
 MI_ROW *row = NULL;
 mi_integer rowid = 0;
@@ -236,22 +324,8 @@ for (i=0; i < numcols; i++){
     full_int = (mi_integer) colval;
     fprintf(f, "%d\t", full_int);
 
+}
 
-    listen(sockfd,5);
-    clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd,
-                       (struct sockaddr *) &cli_addr,
-                       &clilen);
-/* if (newsockfd < 0)
- error("ERROR on accept");
- */
- bzero(buffer,256);
-
- n = write(newsockfd,"I got your message",18);
- //if (n < 0) error("ERROR writing to socket");
- close(newsockfd);
- close(sockfd);
-    }
 
 fclose(f);
 
