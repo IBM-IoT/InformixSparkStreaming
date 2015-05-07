@@ -3,6 +3,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 /*
  * Tracing-related macros
@@ -175,8 +180,7 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
 {
 
-
-FILE *f = fopen("/opt/informix/file.txt", "w");
+FILE *f = fopen("/opt/informix/insert.txt", "w");
   if (f == NULL)
   {
     printf("Error opening file!\n");
@@ -184,52 +188,19 @@ FILE *f = fopen("/opt/informix/file.txt", "w");
   }
 
 
+int sockfd, newsockfd, portno;
+socklen_t clilen;
+char buffer[256];
+struct sockaddr_in serv_addr, cli_addr;
+int n;
 
-  //mi_integer numcols;
-  //mi_string *colname;
+bzero((char *) &serv_addr, sizeof(serv_addr));
+portno = atoi("9999");
+serv_addr.sin_family = AF_INET;
+serv_addr.sin_addr.s_addr = INADDR_ANY;
+serv_addr.sin_port = htons(portno);
 
-  //numcols = mi_column_count(buf1);
-
-  //fprintf(f, "%lx  %lx", *buf0, *buf1);
-  //fprintf(f, "Number of columns: %d\n", numcols);
-/*
-  int i = 0;
-  while( i < numcols )
-  {
-    colname = mi_column_name(buf1, i);
-    fprintf(f, " %s\t", colname);
-    i++;
-  }
-*/
-
-
-//olval = NULL;
-//collen = 0;
-
-//MI_ROW_DESC *rowdesc;
-//rowdesc = mi_get_row_desc(buf1);
-
-//mi_value(*buf1, 1, &colval, &collen);
-
-/*switch( mi_value(*buf1, 1, &colval, &collen) )
-{
-case MI_ERROR:
-        fprintf(f, "MI_ERROR");
-case MI_NULL_VALUE:
-        fprintf(f, "MI_NULL_VALUE");
-        break;
-case MI_NORMAL_VALUE:
-        fprintf(f, "MI_NORMAL_VALUE");
-        break;
-case MI_ROW_VALUE:
-        fprintf(f, "MI_ROW_VALUE");
-        break;
-default:
-    fprintf(f, "DUNNO");
-
-    return( -1 );
-}*/
-
+sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 MI_ROW *row = NULL;
 mi_integer rowid = 0;
@@ -240,23 +211,14 @@ mi_integer nrows = mi_tab_niorows(buf0);
 fprintf(f, "Number of rows: %d\n", nrows);
 
 mi_integer x = mi_tab_nextrow(buf0, &row, &rowid, &fragid);
-fprintf(f, "mi_tab_nextrow %d\n", x);
 
 
 mi_integer numcols;
-
 numcols = mi_column_count(row);
 fprintf(f, "Number of columns: %d\n", numcols);
 
+
 mi_string *colname;
-
-
-mi_integer collen = 0;
-MI_DATUM *colval = NULL;
-
-
-mi_integer y = mi_value(row, 0, &colval, &collen);
-
 int i = 0;
 while( i < numcols )
 {
@@ -266,18 +228,30 @@ while( i < numcols )
 }
 
 
-fprintf(f, "MI_NORMAL_VALUE: %d\n", MI_NORMAL_VALUE);
-fprintf(f, "MI_ROW_VALUE: %d\n", MI_ROW_VALUE);
-fprintf(f, "value length %d\n", collen);
+mi_integer collen = 0;
+MI_DATUM *colval = NULL;
+int full_int = 0;
+for (i=0; i < numcols; i++){
+    mi_integer y = mi_value(row, i, &colval, &collen);
+    full_int = (mi_integer) colval;
+    fprintf(f, "%d\t", full_int);
 
 
+    listen(sockfd,5);
+    clilen = sizeof(cli_addr);
+    newsockfd = accept(sockfd,
+                       (struct sockaddr *) &cli_addr,
+                       &clilen);
+/* if (newsockfd < 0)
+ error("ERROR on accept");
+ */
+ bzero(buffer,256);
 
-int full_int = (mi_integer) colval;
-fprintf(f, "value? %d\n", full_int);
-
-y = mi_value(row, 1, &colval, &collen);
-full_int = (mi_integer) colval;
-fprintf(f, "value? %d", full_int);
+ n = write(newsockfd,"I got your message",18);
+ //if (n < 0) error("ERROR writing to socket");
+ close(newsockfd);
+ close(sockfd);
+    }
 
 fclose(f);
 
@@ -300,8 +274,28 @@ if (f == NULL)
     return -1;
 }
 
-fprintf(f, "update");
+mi_integer numcols;
+numcols = mi_column_count(buf3);
+fprintf(f, "Number of columns: %d\n", numcols);
 
+mi_string *colname;
+int i = 0;
+while( i < numcols )
+{
+colname = mi_column_name(buf3, i);
+fprintf(f, " %s\t", colname);
+i++;
+}
+
+
+mi_integer collen = 0;
+MI_DATUM *colval = NULL;
+int full_int = 0;
+for (i=0; i < numcols; i++){
+    mi_integer y = mi_value(buf3, i, &colval, &collen);
+    full_int = (mi_integer) colval;
+    fprintf(f, "%d\t", full_int);
+}
 fclose(f);
 
 return 0;
