@@ -81,56 +81,12 @@ tachyonCreate (mi_pointer *buf)
   fprintf(f, "%lx \n", buf);
   fprintf(f, "%lx \n", *buf);
 
-  //long *test = *buf;
-  //MI_AM_TABLE_DESC * table = *buf;
- // fprintf(f, "%lx \n", *test);
-  /* print some text */
-  //mi_pointer *test = *buf;
   mi_string* tableName = mi_tab_name(buf);
   const char *text = "Write this to the file";
   fprintf(f, "Table name: %s\n", tableName);
-  //fprintf(f, "test");
-  //fprintf(f, "%lx", *buf);
-
-  //MI_AM_TABLE_DESC test = **buf;
-
-  //fprintf(f, "3: %lx", *buf2);
-
 
   fclose(f);
 
- /* long addrAsLong;
-  char textbuf[100];
-  MI_ROW *row;
-  mi_integer result;
-  MI_DATUM *value;
-  int length;
-
-
-  FILE *f = fopen("/opt/informix/file.txt", "w");
-  if (f == NULL)
-  {
-  printf("Error opening file!\n");
-  return 1;
-  }
-
-
-  POINTER_TRACE_ENTER("tachyonCreate");
-  *//* establish server connection *//*
-  MI_CONNECTION *conn = mi_open(NULL,NULL,NULL);
-  sprintf (textbuf, "execute function createTableInTachyon(%lx);", *buf);
-  result = mi_exec(conn, textbuf, MI_QUERY_BINARY);
-  result = mi_get_result(conn);
-  if (result != MI_NO_MORE_RESULTS) {
-  row = mi_next_row(conn, &result);
-  result = mi_value(row, 0, value, &length);
-  }
-  mi_query_finish(conn);
-  mi_close(conn);
-  POINTER_TRACE_EXIT("tachyonCreate");
-  // return (mi_integer) *value;
-  fprintf(f, "%lx", *value);
-  return (long) *value;*/
   return 0;
 }
 
@@ -177,13 +133,6 @@ tachyonGetNext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
   return 0;
 }
 
-
-void error(const char *msg)
-{
-    perror(msg);
-    exit(1);
-}
-
 MI_DECL mi_integer
 tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
@@ -196,7 +145,6 @@ FILE *f = fopen("/opt/informix/insert.txt", "w");
     return -1;
   }
 
-
 int sockfd, newsockfd, portno;
 socklen_t clilen;
 char buffer[256];
@@ -206,9 +154,6 @@ sockfd = socket(AF_INET, SOCK_STREAM, 0);
 if (sockfd < 0) fprintf(f, "Error opening socket \n");
 bzero((char *) &serv_addr, sizeof(serv_addr));
 
-//portno = atoi("10001");
-fprintf(f, "port number %d \n", portno);
-fprintf(f, "port number %d \n", portno);
 serv_addr.sin_family = AF_INET;
 serv_addr.sin_addr.s_addr = INADDR_ANY;
 serv_addr.sin_port = htons(12517);
@@ -229,34 +174,24 @@ newsockfd = accept(sockfd,
 
 
 if (newsockfd < 0) {
-fprintf(f, "accept failed\n");
-fprintf(f, "errno: %d \n", errno);
+    fprintf(f, "accept failed\n");
+    fprintf(f, "errno: %d \n", errno);
 }
 
 bzero(buffer,256);
-
-//n = write(newsockfd,"I got your message",18);
-//if (n < 0) fprintf(f, "Write failed \n");;
-
-
-
-
 
 MI_ROW *row = NULL;
 mi_integer rowid = 0;
 mi_integer fragid = 0;
 
-//fprintf(f, " %s\t", colname);
 mi_integer nrows = mi_tab_niorows(buf0);
 fprintf(f, "Number of rows: %d\n", nrows);
 
 mi_integer x = mi_tab_nextrow(buf0, &row, &rowid, &fragid);
 
-
 mi_integer numcols;
 numcols = mi_column_count(row);
 fprintf(f, "Number of columns: %d\n", numcols);
-
 
 mi_string *colname;
 int i = 0;
@@ -267,7 +202,6 @@ while( i < numcols )
     i++;
 }
 
-
 mi_integer collen = 0;
 MI_DATUM *colval = NULL;
 int full_int = 0;
@@ -277,10 +211,7 @@ for (i=0; i < numcols; i++){
     mi_integer y = mi_value(row, i, &colval, &collen);
     full_int = (mi_integer) colval;
     int length = sprintf(buffer, "%d", full_int);
-    //int w = (int) full_int;
-    //int t = htonl(w);
-   // itoa(full_int, &t, 10);
-    strcat(buffer, "\n7");
+    strcat(buffer, "\n");
     n = write(newsockfd, buffer, length + 1);
 
     if (n < 0){
@@ -288,8 +219,6 @@ for (i=0; i < numcols; i++){
         fprintf(f, "errno: %d \n", errno);
     }
     fprintf(f, "%s\t", buffer);
-    //fprintf(f, "%d", EBADF);
-
 }
 
 close(newsockfd);
@@ -297,7 +226,7 @@ close(sockfd);
 
 fclose(f);
 
-  return 0;
+return 0;
 }
 
 
@@ -316,6 +245,42 @@ if (f == NULL)
     return -1;
 }
 
+
+int sockfd, newsockfd, portno;
+socklen_t clilen;
+char buffer[256];
+struct sockaddr_in serv_addr, cli_addr;
+int n;
+sockfd = socket(AF_INET, SOCK_STREAM, 0);
+if (sockfd < 0) fprintf(f, "Error opening socket \n");
+bzero((char *) &serv_addr, sizeof(serv_addr));
+
+serv_addr.sin_family = AF_INET;
+serv_addr.sin_addr.s_addr = INADDR_ANY;
+serv_addr.sin_port = htons(12517);
+fprintf(f, "addr: %l\n", serv_addr.sin_addr.s_addr);
+fprintf(f, "port: %d\n", serv_addr.sin_port);
+fprintf(f, "sockfd %d \n", sockfd);
+if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
+fprintf(f, "Bind failed \n");
+fprintf(f, "errno: %d \n", errno);
+}
+
+
+listen(sockfd,5);
+clilen = sizeof(cli_addr);
+newsockfd = accept(sockfd,
+                   (struct sockaddr *) &cli_addr,
+                   &clilen);
+
+
+if (newsockfd < 0) {
+fprintf(f, "accept failed\n");
+fprintf(f, "errno: %d \n", errno);
+}
+
+bzero(buffer,256);
+
 mi_integer numcols;
 numcols = mi_column_count(buf3);
 fprintf(f, "Number of columns: %d\n", numcols);
@@ -330,12 +295,34 @@ i++;
 }
 
 
+
+for (i=0; i < numcols; i++){
+char buffer[100];
+
+mi_integer y = mi_value(row, i, &colval, &collen);
+full_int = (mi_integer) colval;
+int length = sprintf(buffer, "%d", full_int);
+strcat(buffer, "\n");
+n = write(newsockfd, buffer, length + 1);
+
+if (n < 0){
+fprintf(f, "Write failed \n");
+fprintf(f, "errno: %d \n", errno);
+}
+fprintf(f, "%s\t", buffer);
+}
+
+
 mi_integer collen = 0;
 MI_DATUM *colval = NULL;
 int full_int = 0;
 for (i=0; i < numcols; i++){
+    char buffer[100];
     mi_integer y = mi_value(buf3, i, &colval, &collen);
     full_int = (mi_integer) colval;
+    int length = sprintf(buffer, "%d", full_int);
+    strcat(buffer, "\n");
+    n = write(newsockfd, buffer, length + 1);
     fprintf(f, "%d\t", full_int);
 }
 fclose(f);
