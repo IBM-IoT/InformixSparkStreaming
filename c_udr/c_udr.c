@@ -177,8 +177,8 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
     fprintf(f, "port: %d\n", serv_addr.sin_port);
     fprintf(f, "sockfd %d \n", sockfd);
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
-    fprintf(f, "Bind failed \n");
-    fprintf(f, "errno: %d \n", errno);
+        fprintf(f, "Bind failed \n");
+        fprintf(f, "errno: %d \n", errno);
     }
 
 
@@ -209,20 +209,20 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
         i++;
     }
 
-for (i=0; i < numcols; i++){
-    char buffer[100];
+    for (i=0; i < numcols; i++){
+        char buffer[100];
 
-    mi_integer y = mi_value(row, i, &colval, &collen);
-    full_int = (mi_integer) colval;
-    int length = sprintf(buffer, "%d", full_int);
-    strcat(buffer, "\n");
-    n = write(newsockfd, buffer, length + 1);
+        mi_integer y = mi_value(row, i, &colval, &collen);
+        full_int = (mi_integer) colval;
+        int length = sprintf(buffer, "%d", full_int);
+        strcat(buffer, "\n");
+        n = write(newsockfd, buffer, length + 1);
 
-    if (n < 0){
-    fprintf(f, "Write failed \n");
-    fprintf(f, "errno: %d \n", errno);
-    }
-    fprintf(f, "%s\t", buffer);
+        if (n < 0){
+            fprintf(f, "Write failed \n");
+            fprintf(f, "errno: %d \n", errno);
+        }
+        fprintf(f, "%s\t", buffer);
     }
 
 
