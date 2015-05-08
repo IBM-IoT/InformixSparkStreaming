@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 
+
 /*
  * Tracing-related macros
  */
@@ -205,59 +206,12 @@ sockfd = socket(AF_INET, SOCK_STREAM, 0);
 if (sockfd < 0) fprintf(f, "Error opening socket \n");
 bzero((char *) &serv_addr, sizeof(serv_addr));
 
-
-/*
-int listenfd = 0, connfd = 0;
-struct sockaddr_in serv_addr;
-
-char sendBuff[1025];
-time_t ticks;
-
-listenfd = socket(AF_INET, SOCK_STREAM, 0);
-memset(&serv_addr, '0', sizeof(serv_addr));
-memset(sendBuff, '0', sizeof(sendBuff));
-
-serv_addr.sin_family = AF_INET;
-serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-serv_addr.sin_port = htons(5000);
-
-bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
-
-listen(listenfd, 10);
-
-
-*/
-/*while(1)
-{*//*
-
-connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
-
-
-if (connfd < 0) {
-fprintf(f, "accept failed\n");
-fprintf(f, "errno: %d \n", errno);
-}
-
-ticks = time(NULL);
-//snprintf(sendBuff, sizeof(sendBuff), "%.24s\r\n", ctime(&ticks));
-write(connfd, "I got your message",18);
-
-close(connfd);
-sleep(1);
-//}
-
-*/
-
-/*
-
-*/
-
 //portno = atoi("10001");
 fprintf(f, "port number %d \n", portno);
 fprintf(f, "port number %d \n", portno);
 serv_addr.sin_family = AF_INET;
 serv_addr.sin_addr.s_addr = INADDR_ANY;
-serv_addr.sin_port = htons(5002);
+serv_addr.sin_port = htons(12517);
 fprintf(f, "addr: %l\n", serv_addr.sin_addr.s_addr);
 fprintf(f, "port: %d\n", serv_addr.sin_port);
 fprintf(f, "sockfd %d \n", sockfd);
@@ -281,12 +235,10 @@ fprintf(f, "errno: %d \n", errno);
 
 bzero(buffer,256);
 
-n = write(newsockfd,"I got your message",18);
-if (n < 0) fprintf(f, "Write failed \n");;
+//n = write(newsockfd,"I got your message",18);
+//if (n < 0) fprintf(f, "Write failed \n");;
 
 
-close(newsockfd);
-close(sockfd);
 
 
 
@@ -320,12 +272,28 @@ mi_integer collen = 0;
 MI_DATUM *colval = NULL;
 int full_int = 0;
 for (i=0; i < numcols; i++){
+    char buffer[100];
+
     mi_integer y = mi_value(row, i, &colval, &collen);
     full_int = (mi_integer) colval;
-    fprintf(f, "%d\t", full_int);
+    int length = sprintf(buffer, "%d", full_int);
+    //int w = (int) full_int;
+    //int t = htonl(w);
+   // itoa(full_int, &t, 10);
+    strcat(buffer, "\n7");
+    n = write(newsockfd, buffer, length + 1);
+
+    if (n < 0){
+        fprintf(f, "Write failed \n");
+        fprintf(f, "errno: %d \n", errno);
+    }
+    fprintf(f, "%s\t", buffer);
+    //fprintf(f, "%d", EBADF);
 
 }
 
+close(newsockfd);
+close(sockfd);
 
 fclose(f);
 
