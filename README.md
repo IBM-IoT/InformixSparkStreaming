@@ -1,3 +1,11 @@
-# Informix Tachyon VTI Interface
+# Informix Socket Streaming
 
-There is some random junk thrown in this repo as well and it not really organized at this point.
+Stream ```UPDATE``` and ```INSERT``` data into a socket so that it can then by analyzed by an analytics engine such as Apache Spark.
+
+## INSTALL
+
+# IN PROGRESS
+
+
+
+
