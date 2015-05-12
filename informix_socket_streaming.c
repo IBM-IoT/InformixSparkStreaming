@@ -14,23 +14,50 @@ typedef mi_unsigned_char1   mi_uchar;
 typedef mi_unsigned_integer mi_uint;
 typedef mi_double_precision mi_double;
 
+int socket_file_descriptor;
 
 MI_DECL mi_integer
 tachyonCreate (mi_pointer *buf)
 {
-  return 0;
+    FILE *f = fopen("socket_streaming.log", "w");
+    if (f == NULL)
+    {
+        printf("Error opening file!\n");
+    }
+
+    // Open the socket when we create the index.
+    socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_file_descriptor < 0){
+        fprintf(f, "Error opening socket.\n");
+    }
+    else{
+    fprintf(f, "Successfully created socket with file descriptor: %d\n", socket_file_descriptor);
+    }
+
+    return 0;
 }
 
 MI_DECL mi_integer
 tachyonDrop (mi_pointer *buf)
 {
-  return 0;
+    close(newsocket_file_descriptor);
+    close(socket_file_descriptor);
 }
 
 MI_DECL mi_integer
 tachyonOpen (mi_pointer *buf)
 {
-  return 0;
+    FILE *f = fopen("socket_streaming.log", "w");
+    if (f == NULL)
+    {
+        printf("Error opening file!\n");
+    }
+
+    mi_integer rows = a(buf, 512);
+    fprintf(f, "mi_tab_setniorows return value %d\n", rows);
+
+    fclose(f);
+     return 0;
 }
 
 MI_DECL mi_integer
@@ -54,20 +81,19 @@ tachyonGetNext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 MI_DECL mi_integer
 tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 {
-FILE *f = fopen("/opt/informix/insert.txt", "w");
+FILE *f = fopen("socket_streaming.log", "w");
   if (f == NULL)
   {
     printf("Error opening file!\n");
-    return -1;
   }
 
-    int sockfd, newsockfd, portno;
+    int socket_file_descriptor, newsocket_file_descriptor, portno;
     socklen_t clilen;
     char buffer[256];
     struct sockaddr_in serv_addr, cli_addr;
     int n;
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) fprintf(f, "Error opening socket \n");
+    socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_file_descriptor < 0) fprintf(f, "Error opening socket \n");
     bzero((char *) &serv_addr, sizeof(serv_addr));
 
     serv_addr.sin_family = AF_INET;
@@ -75,21 +101,21 @@ FILE *f = fopen("/opt/informix/insert.txt", "w");
     serv_addr.sin_port = htons(12517);
     fprintf(f, "addr: %l\n", serv_addr.sin_addr.s_addr);
     fprintf(f, "port: %d\n", serv_addr.sin_port);
-    fprintf(f, "sockfd %d \n", sockfd);
-    if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
+    fprintf(f, "socket_file_descriptor %d \n", socket_file_descriptor);
+    if (bind(socket_file_descriptor, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
         fprintf(f, "Bind failed \n");
         fprintf(f, "errno: %d \n", errno);
     }
 
 
-    listen(sockfd,5);
+    listen(socket_file_descriptor,5);
     clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd,
+    newsocket_file_descriptor = accept(socket_file_descriptor,
                        (struct sockaddr *) &cli_addr,
                        &clilen);
 
 
-    if (newsockfd < 0) {
+    if (newsocket_file_descriptor < 0) {
         fprintf(f, "accept failed\n");
         fprintf(f, "errno: %d \n", errno);
     }
@@ -128,7 +154,7 @@ FILE *f = fopen("/opt/informix/insert.txt", "w");
         full_int = (mi_integer) colval;
         int length = sprintf(buffer, "%d", full_int);
         strcat(buffer, "\n");
-        n = write(newsockfd, buffer, length + 1);
+        n = write(newsocket_file_descriptor, buffer, length + 1);
 
         if (n < 0){
             fprintf(f, "Write failed \n");
@@ -137,8 +163,8 @@ FILE *f = fopen("/opt/informix/insert.txt", "w");
         fprintf(f, "%s\t", buffer);
     }
 
-    close(newsockfd);
-    close(sockfd);
+    close(newsocket_file_descriptor);
+    close(socket_file_descriptor);
 
     fclose(f);
 
@@ -161,13 +187,13 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
     }
 
 
-    int sockfd, newsockfd, portno;
+    int socket_file_descriptor, newsocket_file_descriptor, portno;
     socklen_t clilen;
     char buffer[256];
     struct sockaddr_in serv_addr, cli_addr;
     int n;
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) fprintf(f, "Error opening socket \n");
+    socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_file_descriptor < 0) fprintf(f, "Error opening socket \n");
     bzero((char *) &serv_addr, sizeof(serv_addr));
 
     serv_addr.sin_family = AF_INET;
@@ -175,21 +201,21 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
     serv_addr.sin_port = htons(12517);
     fprintf(f, "addr: %l\n", serv_addr.sin_addr.s_addr);
     fprintf(f, "port: %d\n", serv_addr.sin_port);
-    fprintf(f, "sockfd %d \n", sockfd);
-    if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
+    fprintf(f, "socket_file_descriptor %d \n", socket_file_descriptor);
+    if (bind(socket_file_descriptor, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
         fprintf(f, "Bind failed \n");
         fprintf(f, "errno: %d \n", errno);
     }
 
 
-    listen(sockfd,5);
+    listen(socket_file_descriptor,5);
     clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd,
+    newsocket_file_descriptor = accept(socket_file_descriptor,
                        (struct sockaddr *) &cli_addr,
                        &clilen);
 
 
-    if (newsockfd < 0) {
+    if (newsocket_file_descriptor < 0) {
     fprintf(f, "accept failed\n");
     fprintf(f, "errno: %d \n", errno);
     }
@@ -216,7 +242,7 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
         full_int = (mi_integer) colval;
         int length = sprintf(buffer, "%d", full_int);
         strcat(buffer, "\n");
-        n = write(newsockfd, buffer, length + 1);
+        n = write(newsocket_file_descriptor, buffer, length + 1);
 
         if (n < 0){
             fprintf(f, "Write failed \n");
@@ -235,7 +261,7 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
         full_int = (mi_integer) colval;
         int length = sprintf(buffer, "%d", full_int);
         strcat(buffer, "\n");
-        n = write(newsockfd, buffer, length + 1);
+        n = write(newsocket_file_descriptor, buffer, length + 1);
         fprintf(f, "%d\t", full_int);
     }
     fclose(f);
