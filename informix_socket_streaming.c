@@ -18,7 +18,7 @@ int socket_file_descriptor;
 int newsocket_file_descriptor;
 char* informix_directory;
 FILE *log_file;
-char buffer[256];
+//char buffer[256];
 
 MI_DECL mi_integer
 tachyonOpen (mi_pointer *tableDesc)
@@ -60,6 +60,7 @@ tachyonCreate (mi_pointer *buf)
     const socklen_t optLen = sizeof(optVal);
 
     int rtn = setsockopt(socket_file_descriptor, SOL_SOCKET, SO_REUSEADDR, (void*) &optVal, optLen);
+    setsockopt(socket_file_descriptor, SOL_SOCKET, SO_REUSEPORT, (void*) &optVal, optLen);
 
     int portno;
     socklen_t clilen;
@@ -71,7 +72,7 @@ tachyonCreate (mi_pointer *buf)
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(13338);
+    serv_addr.sin_port = htons(13340);
     fprintf(log_file, "addr: %l\n", serv_addr.sin_addr.s_addr);
     fprintf(log_file, "port: %d\n", serv_addr.sin_port);
     fprintf(log_file, "socket_file_descriptor %d \n", socket_file_descriptor);
@@ -87,6 +88,7 @@ tachyonCreate (mi_pointer *buf)
                                        &clilen);
 
     rtn = setsockopt(newsocket_file_descriptor, SOL_SOCKET, SO_REUSEADDR, (void*) &optVal, optLen);
+    setsockopt(newsocket_file_descriptor, SOL_SOCKET, SO_REUSEPORT, (void*) &optVal, optLen);
 
     if (newsocket_file_descriptor < 0) {
         fprintf(log_file, "accept failed\n");
@@ -115,51 +117,88 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
     }
 
 
-
-
-    bzero(buffer, 256);
+    //bzero(buffer, 256);
 
     MI_ROW *row = NULL;
+    char buffer[100];
     mi_integer rowid = 0;
     mi_integer fragid = 0;
+    mi_integer x = 0;
+    mi_integer numcols = 0;
+    mi_string *col_type_name;
+    mi_integer collen = 0;
+    MI_DATUM colval = NULL;
+    int full_int = 0;
+    int z = 0;
+    int i = 0;
+    int length = 0;
+     mi_integer y = 0;
 
+    // Get the 
     mi_integer nrows = mi_tab_niorows(buf0);
     fprintf(log_file, "Number of rows: %d\n", nrows);
 
-    mi_integer x = mi_tab_nextrow(buf0, &row, &rowid, &fragid);
+    for (z = 0; z < nrows; z++){  //Pointless, since I can only insert one row at a time anyway.
+        mi_tab_nextrow(buf0, &row, &rowid, &fragid);
 
-    mi_integer numcols;
-    numcols = mi_column_count(row);
-    fprintf(log_file, "Number of columns: %d\n", numcols);
+        numcols = mi_column_count(row);
+        for (i = 0; i < numcols; i++){
+            mi_string *col_type_name = mi_type_typename(mi_column_typedesc(row, i));
+            //fprintf(log_file, "%s\t", col_type_name);
+            fprintf(log_file, "COLUMN TYPE:%s\n", col_type_name);
+             //y = mi_value(row, i, &colval, &collen);
 
-    mi_string *colname;
-    int i = 0;
-    while( i < numcols )
-    {
-        colname = mi_column_name(row, i);
-        fprintf(log_file, " %s\t", colname);
-        i++;
-    }
 
-    mi_integer collen = 0;
-    MI_DATUM *colval = NULL;
-    int full_int = 0;
-    for (i=0; i < numcols; i++){
-        char buffer[100];
+            // Column value is an integer.
+            if (strstr("integer", col_type_name)){
+                y = mi_value(row, i, &colval, &collen);
+                fprintf(log_file, "PROCESS INTEGER:\n");
+                full_int = (mi_integer) colval;
+                length = sprintf(buffer, "%d", full_int);
+                strcat(buffer, ",");
+                fprintf(log_file, "INT VALUE: %s\n", buffer);
+                colval = NULL;
 
-        mi_integer y = mi_value(row, i, &colval, &collen);
-        full_int = (mi_integer) colval;
-        int length = sprintf(buffer, "%d", full_int);
-        strcat(buffer, "\n");
-        n = write(newsocket_file_descriptor, buffer, length + 1);
+            }
+          // Column value is an varchar.
+            if (strstr(col_type_name, "varchar")){
+                mi_lvarchar *lv_ptr;
+                fprintf(log_file, "PROCESSING STRING: \n");
+                y = mi_value(row, i, &lv_ptr, &collen);
+                fprintf(log_file, "LENGTH: %d\n", collen);
 
-        if (n < 0){
-            fprintf(log_file, "Write failed \n");
-            fprintf(log_file, "errno: %d \n", errno);
+                mi_string *test42 = mi_lvarchar_to_string(lv_ptr);
+                strcat(buffer, test42);
+                strcat(buffer, ",");
+                fprintf(log_file, "STRING VALUE: %s\n",test42);
+            }
+            // Column value is an decimal.
+            if (strstr(col_type_name, "decimal")){
+                mi_decimal *floater;
+                fprintf(log_file, "PROCESS DECIMAL:\n");
+                y = mi_value(row, i, &floater, &collen);
+
+                mi_string * test = mi_decimal_to_string(floater);
+                strcat(buffer, test);
+                strcat(buffer, ",");
+                fprintf(log_file, "DECIMAL VALUE: %s\n", test) ;
+                //fprintf(log_file, "LENGTH: %d\n", collen);
+            }
+
+
+
         }
-        fprintf(log_file, "%s\t", buffer);
-    }
+         strcat(buffer, "\n");
+         fprintf(log_file, "BUFFER: %s", buffer);
+         // Send column value through socket.
 
+
+         n = write(newsocket_file_descriptor, buffer, length + 1);
+         if (n < 0){
+             fprintf(log_file, "Write failed \n");
+             fprintf(log_file, "errno: %d \n", errno);
+         }
+    }
     //close(newsocket_file_descriptor);
     //close(socket_file_descriptor);
 
