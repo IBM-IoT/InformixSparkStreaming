@@ -165,8 +165,9 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
                 mi_lvarchar *lv_ptr;
                 fprintf(log_file, "PROCESSING STRING: \n");
                 y = mi_value(row, i, &lv_ptr, &collen);
-                fprintf(log_file, "LENGTH: %d\n", collen);
 
+                fprintf(log_file, "LENGTH: %d\n", collen);
+                length = length + collen;
                 mi_string *test42 = mi_lvarchar_to_string(lv_ptr);
                 strcat(buffer, test42);
                 strcat(buffer, ",");
@@ -177,7 +178,7 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
                 mi_decimal *floater;
                 fprintf(log_file, "PROCESS DECIMAL:\n");
                 y = mi_value(row, i, &floater, &collen);
-
+                length = length + collen;
                 mi_string * test = mi_decimal_to_string(floater);
                 strcat(buffer, test);
                 strcat(buffer, ",");
@@ -193,7 +194,12 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
          // Send column value through socket.
 
 
-         n = write(newsocket_file_descriptor, buffer, length + 1);
+         int index;
+         char *e;
+         e = strchr(buffer, '\0');
+         index = (int)(e - buffer);
+         fprintf(log_file, "LENGTH: %d", index);
+         n = write(newsocket_file_descriptor, buffer, index);
          if (n < 0){
              fprintf(log_file, "Write failed \n");
              fprintf(log_file, "errno: %d \n", errno);
