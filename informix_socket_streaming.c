@@ -72,7 +72,7 @@ tachyonCreate (mi_pointer *buf)
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(13340);
+    serv_addr.sin_port = htons(13341);
     fprintf(log_file, "addr: %l\n", serv_addr.sin_addr.s_addr);
     fprintf(log_file, "port: %d\n", serv_addr.sin_port);
     fprintf(log_file, "socket_file_descriptor %d \n", socket_file_descriptor);
@@ -189,6 +189,7 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
 
         }
+         buffer[strlen(buffer)-1] = 0;
          strcat(buffer, "\n");
          fprintf(log_file, "BUFFER: %s", buffer);
          // Send column value through socket.
