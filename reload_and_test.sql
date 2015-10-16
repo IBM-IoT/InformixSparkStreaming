@@ -27,83 +27,83 @@ drop function if exists tachyonBeginscan(pointer);
 create function tachyonCreate(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonCreate)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonCreate)'
     language C;
 
 create function tachyonDrop(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonDrop)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonDrop)'
     language C;
 
 create function tachyonOpen(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonOpen)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonOpen)'
     language C;
 
 create function tachyonClose(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonClose)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonClose)'
     language C;
 
 create function tachyonGetById(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonGetById)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonGetById)'
     language C;
 
 create function tachyonGetNext(pointer,pointer,pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonGetNext)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonGetNext)'
     language C;
 
 create function tachyonInsert(pointer,pointer,pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonInsert)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonInsert)'
     language C;
 
 create function tachyonBeginscan(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonBeginscan)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonBeginscan)'
     language C;
 
 create function tachyonEndscan(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonEndscan)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonEndscan)'
     language C;
 
 create function tachyonDelete(pointer,pointer,pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonDelete)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonDelete)'
     language C;
 
 create function tachyonUpdate(pointer,pointer,pointer,pointer,pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/c_udr.so(tachyonUpdate)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonUpdate)'
     language C;
 
 create function PointerSend(pointer)
     returns sendrecv
-    external name '/opt/informix/extend/c_udr.so(PointerSend)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(PointerSend)'
     language C not variant;
 
 
 create function PointerInput(lvarchar)
     returns Pointer
-    external name '/opt/informix/extend/c_udr.so(PointerInput)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(PointerInput)'
     language C not variant;
 
 create function PointerOutput(pointer)
     returns lvarchar
-    external name '/opt/informix/extend/c_udr.so(PointerOutput)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(PointerOutput)'
     language C not variant;
 
 CREATE SECONDARY ACCESS_METHOD vii_am4
