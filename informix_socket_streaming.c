@@ -25,41 +25,34 @@ FILE *log_file;
 // viable prototype and that is what I did. Spent no time on making the code sane.
 
 MI_DECL mi_integer
-tachyonOpen (mi_pointer *tableDesc)
+am_open (mi_pointer *tableDesc)
 {
-    openlog("programname", 0, LOG_USER);
-    syslog(LOG_INFO, "%s", "Message");
-    // Create the log file we will use throughout the program.
-    log_file = fopen("/opt/informix/tmp/open.log", "w");
-    if (log_file == NULL)
-    {
-        printf("Error creating log file.\n");
-    }
-
+    // According to Lance, the actual socket creation should be moved here instead of in am_create
+    openlog("AM_OPEN", 0, LOG_USER);
    // Allow up to 512 rows to be inserted/updated with a single SQL statement.
+   // Not sure if this is even needed.
    mi_integer rows = mi_tab_setniorows(tableDesc, 512);
-   fprintf(log_file, "mi_tab_setniorows return value %d\n", rows);
-   fclose(log_file);
+   syslog(LOG_INFO, "mi_tab_setniorows return value %d", rows);
    return 0;
 }
 
 MI_DECL mi_integer
-tachyonClose (mi_pointer *buf)
+am_close (mi_pointer *buf)
 {
     return 0;
 }
 
 MI_DECL mi_integer
-tachyonCreate (mi_pointer *buf)
+am_create (mi_pointer *buf)
 {
-    log_file = fopen("/opt/informix/tmp/create.log", "w");
+    openlog("AM_CREATE", 0, LOG_USER);
     // Open the socket when we create the index.
     socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_file_descriptor < 0){
-        fprintf(log_file, "Error opening socket.\n");
+        syslog(LOG_ERR, "Error opening socket");
     }
     else{
-        fprintf(log_file, "Successfully created socket with file descriptor: %d\n", socket_file_descriptor);
+        syslog(LOG_ERR, "Successfully created socket with file descriptor: %d\n", socket_file_descriptor);
     }
 
     const int       optVal = 1;
@@ -75,16 +68,17 @@ tachyonCreate (mi_pointer *buf)
 
     bzero((char *) &serv_addr, sizeof(serv_addr));
 
-
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(13341);
-    fprintf(log_file, "addr: %l\n", serv_addr.sin_addr.s_addr);
-    fprintf(log_file, "port: %d\n", serv_addr.sin_port);
-    fprintf(log_file, "socket_file_descriptor %d \n", socket_file_descriptor);
+    serv_addr.sin_port = htons(13341); // TODO Make this port number set from a config file.
+
+
+    syslog(LOG_INFO, "addr: %l", serv_addr.sin_addr.s_addr);
+    syslog(LOG_INFO, "port: %d\n", serv_addr.sin_port);
+    syslog(LOG_INFO, "socket_file_descriptor %d \n", socket_file_descriptor);
     if (bind(socket_file_descriptor, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
-        fprintf(log_file, "Bind failed \n");
-        fprintf(log_file, "errno: %d \n", errno);
+        syslog(LOG_INFO, "Bind failed");
+        syslog(LOG_INFO, "Error number: %d \n", errno);
     }
 
     listen(socket_file_descriptor,5);
@@ -97,15 +91,14 @@ tachyonCreate (mi_pointer *buf)
     setsockopt(newsocket_file_descriptor, SOL_SOCKET, SO_REUSEPORT, (void*) &optVal, optLen);
 
     if (newsocket_file_descriptor < 0) {
-        fprintf(log_file, "accept failed\n");
-        fprintf(log_file, "errno: %d \n", errno);
+        syslog(LOG_INFO, "Accept failed");
+        syslog(LOG_INFO, "Error number: %d \n", errno);
     }
-    fclose(log_file);
     return 0;
 }
 
 MI_DECL mi_integer
-tachyonDrop (mi_pointer *buf)
+am_drop (mi_pointer *buf)
 {
     close(newsocket_file_descriptor);
     close(socket_file_descriptor);
@@ -113,17 +106,9 @@ tachyonDrop (mi_pointer *buf)
 }
 
 MI_DECL mi_integer
-tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
+am_insert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 {
-    int n;
-    log_file = fopen("/opt/informix/tmp/insert.log", "w");
-    if (log_file == NULL)
-    {
-        printf("Error opening file!\n");
-    }
-
-
-    //bzero(buffer, 256);
+    openlog("AM_INSERT", 0, LOG_USER);
 
     MI_ROW *row = NULL;
     char buffer[100];
@@ -142,7 +127,7 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
     // Get the 
     mi_integer nrows = mi_tab_niorows(buf0);
-    fprintf(log_file, "Number of rows: %d\n", nrows);
+    syslog(LOG_INFO, "Number of rows: %d\n", nrows);
 
     for (z = 0; z < nrows; z++){  //Pointless, since I can only insert one row at a time anyway.
         mi_tab_nextrow(buf0, &row, &rowid, &fragid);
@@ -150,94 +135,73 @@ tachyonInsert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
         numcols = mi_column_count(row);
         for (i = 0; i < numcols; i++){
             mi_string *col_type_name = mi_type_typename(mi_column_typedesc(row, i));
-            //fprintf(log_file, "%s\t", col_type_name);
-            fprintf(log_file, "COLUMN TYPE:%s\n", col_type_name);
-             //y = mi_value(row, i, &colval, &collen);
+            syslog(LOG_INFO, "Column type: %s\n", col_type_name);
 
 
             // Column value is an integer.
             if (strstr("integer", col_type_name)){
                 y = mi_value(row, i, &colval, &collen);
-                fprintf(log_file, "PROCESS INTEGER:\n");
                 full_int = (mi_integer) colval;
                 length = sprintf(buffer, "%d", full_int);
                 strcat(buffer, ",");
-                fprintf(log_file, "INT VALUE: %s\n", buffer);
+                syslog(LOG_INFO, "INT value is: %s\n", buffer);
                 colval = NULL;
-
             }
-          // Column value is an varchar.
+            // Column value is an varchar.
             if (strstr(col_type_name, "varchar")){
                 mi_lvarchar *lv_ptr;
-                fprintf(log_file, "PROCESSING STRING: \n");
                 y = mi_value(row, i, &lv_ptr, &collen);
-
-                fprintf(log_file, "LENGTH: %d\n", collen);
+                syslog(LOG_INFO, "LENGTH: %d", collen);
                 length = length + collen;
                 mi_string *test42 = mi_lvarchar_to_string(lv_ptr);
                 strcat(buffer, test42);
                 strcat(buffer, ",");
-                fprintf(log_file, "STRING VALUE: %s\n",test42);
+                syslog(LOG_INFO, "STRING VALUE: %s", test42);
             }
             // Column value is an decimal.
             if (strstr(col_type_name, "decimal")){
                 mi_decimal *floater;
-                fprintf(log_file, "PROCESS DECIMAL:\n");
                 y = mi_value(row, i, &floater, &collen);
                 length = length + collen;
                 mi_string * test = mi_decimal_to_string(floater);
                 strcat(buffer, test);
                 strcat(buffer, ",");
-                fprintf(log_file, "DECIMAL VALUE: %s\n", test) ;
-                //fprintf(log_file, "LENGTH: %d\n", collen);
+                syslog(LOG_INFO, "DECIMAL VALUE: %s", test);
             }
-
-
 
         }
          buffer[strlen(buffer)-1] = 0;
          strcat(buffer, "\n");
-         fprintf(log_file, "BUFFER: %s", buffer);
+         syslog(LOG_INFO, "buffer value: %s", buffer);
+
          // Send column value through socket.
-
-
          int index;
          char *e;
          e = strchr(buffer, '\0');
          index = (int)(e - buffer);
-         fprintf(log_file, "LENGTH: %d", index);
-         n = write(newsocket_file_descriptor, buffer, index);
+         syslog(LOG_INFO, "Buffer length: %d", index);
+         int n = write(newsocket_file_descriptor, buffer, index);
          if (n < 0){
-             fprintf(log_file, "Write failed \n");
-             fprintf(log_file, "errno: %d \n", errno);
+            syslog(LOG_INFO, "Write failed");
+            syslog(LOG_INFO, "Error number: %d", errno);
          }
     }
-    //close(newsocket_file_descriptor);
-    //close(socket_file_descriptor);
-
-    fclose(log_file);
 
 return 0;
 }
 
 MI_DECL mi_integer
-tachyonGetByid (mi_pointer *buf)
+am_getnext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 {
   return 0;
 }
 
-MI_DECL mi_integer
-tachyonGetNext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
-{
-  return 0;
-}
-
-tachyonDelete (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
+am_delete (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 {
     return 0;
 }
 
-tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer *buf3, mi_pointer *buf4)
+am_update (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer *buf3, mi_pointer *buf4)
 {
 /*    FILE *f = fopen("/opt/informix/update.txt", "w");
     if (f == NULL)
@@ -328,12 +292,12 @@ tachyonUpdate (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer 
     return 0;
 }
 
-tachyonEndscan (mi_pointer *buf)
+am_endscan (mi_pointer *buf)
 {
     return 0;
 }
 
-tachyonBeginscan (mi_pointer *buf)
+am_beginscan (mi_pointer *buf)
 {
     return 0;
 }
