@@ -20,6 +20,9 @@ char* informix_directory;
 FILE *log_file;
 //char buffer[256];
 
+// TODO This is a mess. Whoever inherits this, sorry for the technical debt. I was instructed to create the minimal
+// viable prototype and that is what I did. Spent no time on making the code sane.
+
 MI_DECL mi_integer
 tachyonOpen (mi_pointer *tableDesc)
 {
