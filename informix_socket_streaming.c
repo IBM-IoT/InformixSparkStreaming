@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
 
-typedef mi_unsigned_char1   mi_uchar;
+typedef mi_unsigned_char1 mi_uchar;
 typedef mi_unsigned_integer mi_uint;
 typedef mi_double_precision mi_double;
 
@@ -26,6 +27,8 @@ FILE *log_file;
 MI_DECL mi_integer
 tachyonOpen (mi_pointer *tableDesc)
 {
+    openlog("programname", 0, LOG_USER);
+    syslog(LOG_INFO, "%s", "Message");
     // Create the log file we will use throughout the program.
     log_file = fopen("/opt/informix/tmp/open.log", "w");
     if (log_file == NULL)
