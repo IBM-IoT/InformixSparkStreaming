@@ -81,7 +81,7 @@ create function PointerInput(lvarchar)
 
 create function PointerOutput(pointer)
     returns lvarchar
-    external name '/opt/informix/extend/informix_socket_streaming.so(PointerOutput)'
+    external name '/opt/informix/xtend/informix_socket_streaming.so(PointerOutput)'
     language C not variant;
 
 -- Now create the secondary access method (the virtual index)
@@ -101,9 +101,9 @@ AM_SPTYPE = 'A');
 
 -- TODO I don't recall that the stuff below does. Is it needed?
 
-CREATE OPCLASS abs_btree_ops3 FOR vii_am4
+CREATE OPCLASS abs_btree_ops3 FOR informix_socket_streaming
    STRATEGIES (abs_lt, abs_lte, abs_eq, abs_gte, abs_gt)
    SUPPORT (abs_cmp);
 
-ALTER ACCESS_METHOD vii_am4
+ALTER ACCESS_METHOD informix_socket_streaming
 ADD AM_DEFOPCLASS = abs_btree_ops3;
