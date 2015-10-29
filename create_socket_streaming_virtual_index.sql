@@ -68,22 +68,6 @@ create function tachyonUpdate(pointer,pointer,pointer,pointer,pointer)
     external name '/opt/informix/extend/informix_socket_streaming.so(tachyonUpdate)'
     language C;
 
-create function PointerSend(pointer)
-    returns sendrecv
-    external name '/opt/informix/extend/informix_socket_streaming.so(PointerSend)'
-    language C not variant;
-
-
-create function PointerInput(lvarchar)
-    returns Pointer
-    external name '/opt/informix/extend/informix_socket_streaming.so(PointerInput)'
-    language C not variant;
-
-create function PointerOutput(pointer)
-    returns lvarchar
-    external name '/opt/informix/xtend/informix_socket_streaming.so(PointerOutput)'
-    language C not variant;
-
 -- Now create the secondary access method (the virtual index)
 
 CREATE SECONDARY ACCESS_METHOD informix_socket_streaming
@@ -99,11 +83,11 @@ AM_DELETE = tachyonDelete,
 AM_UPDATE = tachyonUpdate,
 AM_SPTYPE = 'A');
 
--- TODO I don't recall that the stuff below does. Is it needed?
 
-CREATE OPCLASS abs_btree_ops3 FOR informix_socket_streaming
+-- We must define a default operator class for our custom access method. Here it is simply given a junk one.
+CREATE OPCLASS junk_operator_class FOR informix_socket_streaming
    STRATEGIES (abs_lt, abs_lte, abs_eq, abs_gte, abs_gt)
    SUPPORT (abs_cmp);
 
 ALTER ACCESS_METHOD informix_socket_streaming
-ADD AM_DEFOPCLASS = abs_btree_ops3;
+ADD AM_DEFOPCLASS = junk_operator_class;
