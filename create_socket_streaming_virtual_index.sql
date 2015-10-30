@@ -1,86 +1,81 @@
--- Create the UDRs that we will use to create the seconary access method.
+-- Create the UDRs that we will use to create the secondary access method.
 -- TODO Change names to something other than tachyon, that is left over from our Tachyon experimentation
 -- TODO Change "/opt/informix" to an environment variable that points to the Informix base directory instead
 
-create function tachyonCreate(pointer)
+create function am_create(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonCreate)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_create)'
     language C;
 
-create function tachyonDrop(pointer)
+create function am_drop(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonDrop)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_drop)'
     language C;
 
-create function tachyonOpen(pointer)
+create function am_open(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonOpen)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_open)'
     language C;
 
-create function tachyonClose(pointer)
+create function am_close(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonClose)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_close)'
     language C;
 
-create function tachyonGetById(pointer)
+create function am_getnext(pointer, pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonGetById)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_getnext)'
     language C;
 
-create function tachyonGetNext(pointer,pointer,pointer)
+create function am_insert(pointer,pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonGetNext)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_insert)'
     language C;
 
-create function tachyonInsert(pointer,pointer,pointer)
+create function am_beginscan(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonInsert)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_beginscan)'
     language C;
 
-create function tachyonBeginscan(pointer)
+create function am_endscan(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonBeginscan)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_endscan)'
     language C;
 
-create function tachyonEndscan(pointer)
+create function am_delete(pointer, pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonEndscan)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_delete)'
     language C;
 
-create function tachyonDelete(pointer,pointer,pointer)
+create function am_update(pointer, pointer, pointer, pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonDelete)'
+    external name '/opt/informix/extend/informix_socket_streaming.so(am_update)'
     language C;
 
-create function tachyonUpdate(pointer,pointer,pointer,pointer,pointer)
-    RETURNING INTEGER
-    with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(tachyonUpdate)'
-    language C;
 
 -- Now create the secondary access method (the virtual index)
 
 CREATE SECONDARY ACCESS_METHOD informix_socket_streaming
-(AM_OPEN = tachyonOpen,
-AM_CLOSE = tachyonClose,
-AM_CREATE = tachyonCreate,
-AM_DROP = tachyonDrop,
-AM_BEGINSCAN = tachyonBeginscan,
-AM_GETNEXT = tachyonGetNext,
-AM_ENDSCAN = tachyonEndscan,
-AM_INSERT = tachyonInsert,
-AM_DELETE = tachyonDelete,
-AM_UPDATE = tachyonUpdate,
+(AM_OPEN = am_open,
+AM_CLOSE = am_close,
+AM_CREATE = am_create,
+AM_DROP = am_drop,
+AM_BEGINSCAN = am_beginscan,
+AM_GETNEXT = am_getnext,
+AM_ENDSCAN = am_endscan,
+AM_INSERT = am_insert,
+AM_DELETE = am_delete,
+AM_UPDATE = am_update,
 AM_SPTYPE = 'A');
 
 

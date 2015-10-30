@@ -1,3 +1,6 @@
+-- Very simple test of the streaming functionality. Create a table, add the socket streaming index type and insert
+-- some data.
+
 create table test(col1 INTEGER, col2 INTEGER);
 
 create index socket_stream on test(col1) USING informix_socket_streaming;

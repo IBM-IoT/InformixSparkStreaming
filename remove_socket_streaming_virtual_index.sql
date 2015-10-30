@@ -3,17 +3,13 @@
 DROP ACCESS_METHOD if exists informix_socket_streaming restrict;
 DROP OPCLASS if exists junk_operator_class restrict;
 
-drop function if exists PointerSend(pointer);
-drop function if exists PointerInput(lvarchar);
-drop function if exists PointerOutput(pointer);
-drop function if exists tachyonCreate(pointer);
-drop function if exists tachyonOpen(pointer);
-drop function if exists tachyonClose(pointer);
-drop function if exists tachyonDrop(pointer);
-drop function if exists tachyonGetById(pointer);
-drop function if exists tachyonGetNext(pointer,pointer,pointer);
-drop function if exists tachyonInsert(pointer,pointer,pointer);
-drop function if exists tachyonUpdate(pointer,pointer,pointer,pointer,pointer);
-drop function if exists tachyonDelete(pointer,pointer,pointer);
-drop function if exists tachyonEndscan(pointer);
-drop function if exists tachyonBeginscan(pointer);
+drop function if exists am_create(pointer);
+drop function if exists am_drop(pointer);
+drop function if exists am_close(pointer);
+drop function if exists am_drop(pointer);
+drop function if exists am_getnext(pointer,pointer,pointer);
+drop function if exists am_insert(pointer,pointer,pointer);
+drop function if exists am_update(pointer,pointer,pointer,pointer,pointer);
+drop function if exists am_delete(pointer,pointer,pointer);
+drop function if exists am_endscan(pointer);
+drop function if exists am_beginscan(pointer);
