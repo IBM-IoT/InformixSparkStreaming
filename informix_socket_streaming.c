@@ -203,6 +203,7 @@ am_delete (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
 
 am_update (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer *buf3, mi_pointer *buf4)
 {
+// TODO I believe this was working (or partially working?) but I temporarily disabled it.
 /*    FILE *f = fopen("/opt/informix/update.txt", "w");
     if (f == NULL)
     {
