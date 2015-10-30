@@ -1,6 +1,5 @@
 -- Create the UDRs that we will use to create the secondary access method.
 -- TODO Change names to something other than tachyon, that is left over from our Tachyon experimentation
--- TODO Change "/opt/informix" to an environment variable that points to the Informix base directory instead
 
 create function am_create(pointer)
     RETURNING INTEGER
@@ -11,55 +10,55 @@ create function am_create(pointer)
 create function am_drop(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_drop)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_drop)'
     language C;
 
 create function am_open(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_open)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_open)'
     language C;
 
 create function am_close(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_close)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_close)'
     language C;
 
 create function am_getnext(pointer, pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_getnext)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_getnext)'
     language C;
 
 create function am_insert(pointer,pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_insert)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_insert)'
     language C;
 
 create function am_beginscan(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_beginscan)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_beginscan)'
     language C;
 
 create function am_endscan(pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_endscan)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_endscan)'
     language C;
 
 create function am_delete(pointer, pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_delete)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_delete)'
     language C;
 
 create function am_update(pointer, pointer, pointer, pointer, pointer)
     RETURNING INTEGER
     with (not variant, parallelizable)
-    external name '/opt/informix/extend/informix_socket_streaming.so(am_update)'
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_update)'
     language C;
 
 

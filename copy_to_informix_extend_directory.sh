@@ -1,0 +1,1 @@
+cp informix_socket_streaming.so $INFORMIXDIR/extend/informix_socket_streaming.so
