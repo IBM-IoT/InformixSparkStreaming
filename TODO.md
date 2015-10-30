@@ -18,5 +18,5 @@ There is already some very primitive logging functionality but it needs to be im
  similar to that used in INSERT
 - Figure out how to handle multiple indexes
 - Figure out how to streaming on multiple columns within a single index (if we even want this)
-- Better handle the opening and closing the sockets. How best to handle sockets with database being opened and re-opened.
+- Better handle the opening and closing of sockets. How best to handle sockets with database being opened and re-opened.
 - Overall socket management, how to handle sockets that are already in use, etc...
