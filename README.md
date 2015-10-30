@@ -37,8 +37,12 @@ stream. Whenever data is inserted into the column, it will then automatically be
 This feature is still in the early prototype phase and as a result has minimal functionality.
 
 - Only the types INT, DECIMAL and VARCHAR are supported.
-- Only works on INSERT, need to get working with UPDATE aswell
+- Only works on INSERT, need to get working with UPDATE as well
 - Can only do one column at a time (?)
+- No way to handle multiple indices
+- Opening/closing of ports is buggy
+- No way to configure which ports to use or output format
+- See TODO.md for more.
 
 
 
