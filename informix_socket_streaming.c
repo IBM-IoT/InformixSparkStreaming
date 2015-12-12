@@ -1,5 +1,7 @@
 #include <mi.h>
 #include <miami.h>
+#include <sqltypes.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,294 +13,501 @@
 #include <netinet/in.h>
 #include <errno.h>
 
-typedef mi_unsigned_char1 mi_uchar;
-typedef mi_unsigned_integer mi_uint;
-typedef mi_double_precision mi_double;
+#include "MQTTClient.h"
 
-int socket_file_descriptor;
-int newsocket_file_descriptor;
-char* informix_directory;
-FILE *log_file;
-//char buffer[256];
+#define AMPARAM_TOKEN_DELIMITERS " =,"
 
-// TODO This is a mess. Whoever inherits this, sorry for the technical debt. I was instructed to create the minimal
-// viable prototype and that is what I did. Spent no time on making the code sane.
+mi_real *constantScanCost = NULL;
 
-MI_DECL mi_integer
-am_open (mi_pointer *tableDesc)
+typedef struct _ISS_LinkedList {
+  void *payload;
+  struct _ISS_LinkedList *next;
+} ISS_LinkedList;
+
+typedef struct {
+  MQTTClient client;
+  char *serverURI;
+  int indexCount;
+} ISS_MQTTSettings;
+
+typedef struct {
+  char *mqttTopic, *indexName;
+  ISS_MQTTSettings *mqttSettings;
+} ISS_Index;
+
+ISS_LinkedList *indexList = 0, *mqttList = 0;
+
+ISS_LinkedList* ISS_LinkedList_remove( ISS_LinkedList *list, ISS_LinkedList *link )
 {
-    // According to Lance, the actual socket creation should be moved here instead of in am_create
-    openlog("AM_OPEN", 0, LOG_USER);
-   // Allow up to 512 rows to be inserted/updated with a single SQL statement.
-   // Not sure if this is even needed.
-   mi_integer rows = mi_tab_setniorows(tableDesc, 512);
-   syslog(LOG_INFO, "mi_tab_setniorows return value %d", rows);
-   return 0;
-}
+  if( list == link )
+  {
+    return list->next;
+  }
 
-MI_DECL mi_integer
-am_close (mi_pointer *buf)
-{
-    return 0;
-}
-
-MI_DECL mi_integer
-am_create (mi_pointer *buf)
-{
-    openlog("AM_CREATE", 0, LOG_USER);
-    // Open the socket when we create the index.
-    socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_file_descriptor < 0){
-        syslog(LOG_ERR, "Error opening socket");
-    }
-    else{
-        syslog(LOG_ERR, "Successfully created socket with file descriptor: %d\n", socket_file_descriptor);
-    }
-
-    const int       optVal = 1;
-    const socklen_t optLen = sizeof(optVal);
-
-    int rtn = setsockopt(socket_file_descriptor, SOL_SOCKET, SO_REUSEADDR, (void*) &optVal, optLen);
-    setsockopt(socket_file_descriptor, SOL_SOCKET, SO_REUSEPORT, (void*) &optVal, optLen);
-
-    int portno;
-    socklen_t clilen;
-
-    struct sockaddr_in serv_addr, cli_addr;
-
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(13341); // TODO Make this port number set from a config file.
-
-
-    syslog(LOG_INFO, "addr: %l", serv_addr.sin_addr.s_addr);
-    syslog(LOG_INFO, "port: %d\n", serv_addr.sin_port);
-    syslog(LOG_INFO, "socket_file_descriptor %d \n", socket_file_descriptor);
-    if (bind(socket_file_descriptor, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
-        syslog(LOG_INFO, "Bind failed");
-        syslog(LOG_INFO, "Error number: %d \n", errno);
-    }
-
-    listen(socket_file_descriptor,5);
-    clilen = sizeof(cli_addr);
-    newsocket_file_descriptor = accept(socket_file_descriptor,
-                                       (struct sockaddr *) &cli_addr,
-                                       &clilen);
-
-    rtn = setsockopt(newsocket_file_descriptor, SOL_SOCKET, SO_REUSEADDR, (void*) &optVal, optLen);
-    setsockopt(newsocket_file_descriptor, SOL_SOCKET, SO_REUSEPORT, (void*) &optVal, optLen);
-
-    if (newsocket_file_descriptor < 0) {
-        syslog(LOG_INFO, "Accept failed");
-        syslog(LOG_INFO, "Error number: %d \n", errno);
-    }
-    return 0;
-}
-
-MI_DECL mi_integer
-am_drop (mi_pointer *buf)
-{
-    close(newsocket_file_descriptor);
-    close(socket_file_descriptor);
-    return 0;
-}
-
-MI_DECL mi_integer
-am_insert (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
-{
-    openlog("AM_INSERT", 0, LOG_USER);
-
-    MI_ROW *row = NULL;
-    char buffer[100];
-    mi_integer rowid = 0;
-    mi_integer fragid = 0;
-    mi_integer x = 0;
-    mi_integer numcols = 0;
-    mi_string *col_type_name;
-    mi_integer collen = 0;
-    MI_DATUM colval = NULL;
-    int full_int = 0;
-    int z = 0;
-    int i = 0;
-    int length = 0;
-     mi_integer y = 0;
-
-    // Get the 
-    mi_integer nrows = mi_tab_niorows(buf0);
-    syslog(LOG_INFO, "Number of rows: %d\n", nrows);
-
-    for (z = 0; z < nrows; z++){  //Pointless, since I can only insert one row at a time anyway.
-        mi_tab_nextrow(buf0, &row, &rowid, &fragid);
-
-        numcols = mi_column_count(row);
-        for (i = 0; i < numcols; i++){
-            mi_string *col_type_name = mi_type_typename(mi_column_typedesc(row, i));
-            syslog(LOG_INFO, "Column type: %s\n", col_type_name);
-
-
-            // Column value is an integer.
-            if (strstr("integer", col_type_name)){
-                y = mi_value(row, i, &colval, &collen);
-                full_int = (mi_integer) colval;
-                length = sprintf(buffer, "%d", full_int);
-                strcat(buffer, ",");
-                syslog(LOG_INFO, "INT value is: %s\n", buffer);
-                colval = NULL;
-            }
-            // Column value is an varchar.
-            if (strstr(col_type_name, "varchar")){
-                mi_lvarchar *lv_ptr;
-                y = mi_value(row, i, &lv_ptr, &collen);
-                syslog(LOG_INFO, "LENGTH: %d", collen);
-                length = length + collen;
-                mi_string *test42 = mi_lvarchar_to_string(lv_ptr);
-                strcat(buffer, test42);
-                strcat(buffer, ",");
-                syslog(LOG_INFO, "STRING VALUE: %s", test42);
-            }
-            // Column value is an decimal.
-            if (strstr(col_type_name, "decimal")){
-                mi_decimal *floater;
-                y = mi_value(row, i, &floater, &collen);
-                length = length + collen;
-                mi_string * test = mi_decimal_to_string(floater);
-                strcat(buffer, test);
-                strcat(buffer, ",");
-                syslog(LOG_INFO, "DECIMAL VALUE: %s", test);
-            }
-
-        }
-         buffer[strlen(buffer)-1] = 0;
-         strcat(buffer, "\n");
-         syslog(LOG_INFO, "buffer value: %s", buffer);
-
-         // Send column value through socket.
-         int index;
-         char *e;
-         e = strchr(buffer, '\0');
-         index = (int)(e - buffer);
-         syslog(LOG_INFO, "Buffer length: %d", index);
-         int n = write(newsocket_file_descriptor, buffer, index);
-         if (n < 0){
-            syslog(LOG_INFO, "Write failed");
-            syslog(LOG_INFO, "Error number: %d", errno);
-         }
-    }
-
-return 0;
-}
-
-MI_DECL mi_integer
-am_getnext (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
-{
-  return 0;
-}
-
-am_delete (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2)
-{
-    return 0;
-}
-
-am_update (mi_pointer *buf0, mi_pointer *buf1, mi_pointer *buf2, mi_pointer *buf3, mi_pointer *buf4)
-{
-// TODO I believe this was working (or partially working?) but I temporarily disabled it.
-/*    FILE *f = fopen("/opt/informix/update.txt", "w");
-    if (f == NULL)
+  ISS_LinkedList *prev = list, *current = list->next;
+  while( current != NULL )
+  {
+    if( link == current )
     {
-        printf("Error opening file!\n");
-        return -1;
+      prev->next = current->next;
+      break;
     }
 
+    prev = current;
+    current = current->next;
+  }
 
-    int socket_file_descriptor, newsocket_file_descriptor, portno;
-    socklen_t clilen;
-    char buffer[256];
-    struct sockaddr_in serv_addr, cli_addr;
-    int n;
-    socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_file_descriptor < 0) fprintf(f, "Error opening socket \n");
-    bzero((char *) &serv_addr, sizeof(serv_addr));
+  return list;
+}
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(12517);
-    fprintf(f, "addr: %l\n", serv_addr.sin_addr.s_addr);
-    fprintf(f, "port: %d\n", serv_addr.sin_port);
-    fprintf(f, "socket_file_descriptor %d \n", socket_file_descriptor);
-    if (bind(socket_file_descriptor, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0){
-        fprintf(f, "Bind failed \n");
-        fprintf(f, "errno: %d \n", errno);
-    }
+ISS_LinkedList* ISS_LinkedList_add( ISS_LinkedList *list, ISS_LinkedList *link )
+{
+  if( list == NULL )
+  {
+    list = link;
+    link->next = NULL;
+  }
+  else
+  {
+    link->next = list;
+  }
 
+  return link;
+}
 
-    listen(socket_file_descriptor,5);
-    clilen = sizeof(cli_addr);
-    newsocket_file_descriptor = accept(socket_file_descriptor,
-                       (struct sockaddr *) &cli_addr,
-                       &clilen);
+mi_integer getTableName( mi_string *indexName, char *dest )
+{
+  MI_CONNECTION *conn = mi_open( NULL, NULL, NULL );
+  if( !conn ) return MI_ERROR;
+  mi_string queryString[256];
+  sprintf( queryString , "select tabname from sysindices join systables on sysindices.tabid = systables.tabid where sysindices.idxname = '%s'" , indexName );
+  if( mi_exec( conn , queryString , MI_QUERY_BINARY ) == MI_ERROR ) return MI_ERROR;
+  if( mi_get_result( conn ) != MI_ROWS ) return MI_ERROR;
 
+  mi_integer error = 0;
+  MI_ROW *row = mi_next_row( conn , &error );
+  if( !row ) return MI_ERROR;
 
-    if (newsocket_file_descriptor < 0) {
-    fprintf(f, "accept failed\n");
-    fprintf(f, "errno: %d \n", errno);
-    }
+  MI_DATUM valueBuffer = 0;
+  mi_integer valueLen = 0;
+  if( mi_value( row , 0 , &valueBuffer , &valueLen ) != MI_NORMAL_VALUE ) return MI_ERROR;
 
-    bzero(buffer,256);
+  mi_string *tableName = mi_lvarchar_to_string( (mi_lvarchar*)valueBuffer );
+  strcat( dest , tableName );
+  mi_free( tableName );
 
-    mi_integer numcols;
-    numcols = mi_column_count(buf3);
-    fprintf(f, "Number of columns: %d\n", numcols);
+  return MI_OK;
+}
 
-    mi_string *colname;
-    int i = 0;
-    while( i < numcols )
+mi_integer getMQTTServerURI( MI_AM_TABLE_DESC *tableDesc, char *serverURI )
+{
+  mi_string *params = mi_tab_amparam( tableDesc );
+  syslog( LOG_INFO, "AM Params: %s\n", params );
+
+  if( params )
+  {
+    char serverHost[128], serverPort[6];
+    char *paramName = strtok( params, AMPARAM_TOKEN_DELIMITERS );
+    char *paramValue = strtok( 0, AMPARAM_TOKEN_DELIMITERS );
+    while( paramName )
     {
-        colname = mi_column_name(buf3, i);
-        fprintf(f, " %s\t", colname);
-        i++;
+      if( !paramValue )
+      {
+        syslog( LOG_INFO, "Missing param value for: %s\n", paramName );
+        return MI_ERROR;
+      }
+
+      if( strcmp( paramName , "host" ) == 0 )
+      {
+        int len = strlen( paramValue );
+        if( len > 127 ) return MI_ERROR;
+
+        memcpy( serverHost , paramValue , len );
+        serverHost[ len ] = 0;
+      }
+      else if( strcmp( paramName , "port" ) == 0 )
+      {
+        int len = strlen( paramValue );
+        if( len > 5 ) return MI_ERROR;
+
+        memcpy( serverPort , paramValue , len );
+        serverPort[ len ] = 0;
+      }
+      else
+      {
+        syslog( LOG_INFO, "Unknown parameter name: %s\n", paramName );
+        return MI_ERROR;
+      }
+
+      paramName = strtok( 0, AMPARAM_TOKEN_DELIMITERS );
+      paramValue = strtok( 0, AMPARAM_TOKEN_DELIMITERS );
     }
 
-    for (i=0; i < numcols; i++){
-        char buffer[100];
+    sprintf( serverURI , "tcp://%s:%s" , serverHost ,serverPort );
+    syslog( LOG_INFO, "MQTT Server URI: %s\n" , serverURI );
+  }
+  else
+  {
+    syslog( LOG_INFO, "No parameters supplied.\n" );
+    return MI_ERROR;
+  }
 
-        mi_integer y = mi_value(row, i, &colval, &collen);
-        full_int = (mi_integer) colval;
-        int length = sprintf(buffer, "%d", full_int);
-        strcat(buffer, "\n");
-        n = write(newsocket_file_descriptor, buffer, length + 1);
-
-        if (n < 0){
-            fprintf(f, "Write failed \n");
-            fprintf(f, "errno: %d \n", errno);
-        }
-        fprintf(f, "%s\t", buffer);
-    }
-
-
-    mi_integer collen = 0;
-    MI_DATUM *colval = NULL;
-    int full_int = 0;
-    for (i=0; i < numcols; i++){
-        char buffer[100];
-        mi_integer y = mi_value(buf3, i, &colval, &collen);
-        full_int = (mi_integer) colval;
-        int length = sprintf(buffer, "%d", full_int);
-        strcat(buffer, "\n");
-        n = write(newsocket_file_descriptor, buffer, length + 1);
-        fprintf(f, "%d\t", full_int);
-    }
-    fclose(f);*/
-    return 0;
+  return MI_OK;
 }
 
-am_endscan (mi_pointer *buf)
+ISS_MQTTSettings* getMQTTSettings( char *serverURI )
 {
-    return 0;
+  ISS_MQTTSettings *settings = NULL;
+  ISS_LinkedList *current = mqttList;
+  while( current != NULL )
+  {
+    settings = (ISS_MQTTSettings*)current->payload;
+    if( strcmp( settings->serverURI , serverURI ) == 0 ) break;
+    settings = NULL;
+    current = current->next;
+  }
+
+  if( settings == NULL )
+  {
+    settings = (ISS_MQTTSettings*)mi_dalloc( sizeof(ISS_MQTTSettings) , PER_SYSTEM );
+    settings->client = NULL;
+    settings->serverURI = serverURI;
+    settings->indexCount = 0;
+
+    ISS_LinkedList *newLink = (ISS_LinkedList*)mi_dalloc( sizeof(ISS_LinkedList*) , PER_SYSTEM );
+    newLink->payload = settings;
+    mqttList = ISS_LinkedList_add( mqttList , newLink );
+  }
+
+  return settings;
 }
 
-am_beginscan (mi_pointer *buf)
+void removeMQTTSettings( ISS_MQTTSettings *target )
 {
-    return 0;
+    ISS_MQTTSettings *settings = NULL;
+    ISS_LinkedList *current = mqttList;
+    while( current != NULL )
+    {
+      settings = (ISS_MQTTSettings*)current->payload;
+      if( settings == target ) break;
+      settings = NULL;
+      current = current->next;
+    }
+
+    if( settings != NULL )
+    {
+      mqttList = ISS_LinkedList_remove( mqttList , current );
+      mi_free( current );
+
+      syslog( LOG_INFO, "Removing MQTT Settings for: %s\n", settings->serverURI );
+
+      if( settings->client )
+      {
+        if( MQTTClient_isConnected( settings->client ) ) MQTTClient_disconnect( settings->client , 1 );
+        MQTTClient_destroy( &settings->client );
+      }
+      mi_free( settings->serverURI );
+      mi_free( settings );
+    }
 }
+
+mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
+{
+  if( !mqttSettings->client || !MQTTClient_isConnected( mqttSettings->client ) )
+  {
+    MQTTClient_connectOptions connOpts = MQTTClient_connectOptions_initializer;
+    connOpts.keepAliveInterval = 20;
+    connOpts.cleansession = 1;
+    connOpts.connectTimeout = 1;
+
+    if( !mqttSettings->client )
+    {
+      syslog( LOG_INFO, "Creating new MQTT Client...\n" );
+      int rc = MQTTClient_create( &mqttSettings->client , mqttSettings->serverURI , "IfxSparkStream" , MQTTCLIENT_PERSISTENCE_NONE , 0 );
+      if( rc != MQTTCLIENT_SUCCESS )
+      {
+        syslog( LOG_INFO, "MQTT Client create error code: %d\n" , rc );
+        return MI_ERROR;
+      }
+    }
+
+    int rc = MQTTClient_connect( mqttSettings->client , &connOpts );
+    if( rc != MQTTCLIENT_SUCCESS )
+    {
+      syslog( LOG_INFO, "Unable to connect to MQTT server. Error code: %d\n" , rc );
+      return MI_ERROR;
+    }
+
+    syslog( LOG_INFO, "MQTT Client connected\n" );
+  }
+
+  return MI_OK;
+}
+
+ISS_Index* getIndex( MI_AM_TABLE_DESC *tableDesc )
+{
+  mi_string *indexName = mi_tab_name( tableDesc );
+  ISS_LinkedList *current = indexList;
+  ISS_Index *index = NULL;
+  while( current != NULL )
+  {
+    index = (ISS_Index*)current->payload;
+    if( strcmp( index->indexName , indexName ) == 0 ) break;
+    index = NULL;
+    current = current->next;
+  }
+
+  if( index == NULL )
+  {
+    int indexNameLen = strlen( indexName );
+
+    index = (ISS_Index*)mi_dalloc( sizeof(ISS_Index) , PER_SYSTEM );
+    index->mqttTopic = (char*)mi_dalloc( sizeof(char) * 256 , PER_SYSTEM );
+    index->indexName = (char*)mi_dalloc( sizeof(char) * ( indexNameLen + 1 ) , PER_SYSTEM );
+    memset( index->mqttTopic , 0 , 256 );
+    memcpy( index->indexName , indexName , indexNameLen );
+    index->indexName[ indexNameLen ] = 0;
+    getTableName( indexName , index->mqttTopic );
+
+    char *mqttServerURI = (char*)mi_dalloc( sizeof(char) * 256 , PER_SYSTEM );
+    memset( mqttServerURI , 0 , 256 );
+    if( getMQTTServerURI( tableDesc , mqttServerURI ) == MI_ERROR ) return NULL;
+    index->mqttSettings = getMQTTSettings( mqttServerURI );
+    index->mqttSettings->indexCount++;
+
+    ISS_LinkedList *newLink = (ISS_LinkedList*)mi_dalloc( sizeof(ISS_LinkedList) , PER_SYSTEM );
+    newLink->payload = index;
+    indexList = ISS_LinkedList_add( indexList , newLink );
+
+    syslog( LOG_INFO, "Added index: %s\n" , ((ISS_Index*)newLink->payload)->indexName );
+  }
+
+  if( connectMQTTClient( index->mqttSettings ) != MI_OK ) index = NULL;
+
+  return index;
+}
+
+void removeIndex( mi_string *indexName )
+{
+  ISS_Index *index = NULL;
+  ISS_LinkedList *current = indexList;
+  while( current != NULL )
+  {
+    index = (ISS_Index*)current->payload;
+    if( strcmp( index->indexName , indexName ) == 0 ) break;
+    index = NULL;
+    current = current->next;
+  }
+
+  if( index != NULL )
+  {
+    indexList = ISS_LinkedList_remove( indexList , current );
+    mi_free( current );
+
+    syslog( LOG_INFO, "Removed index: %s\n", index->indexName );
+
+    mi_free( index->mqttTopic );
+    mi_free( index->indexName );
+    index->mqttSettings->indexCount--;
+    if( index->mqttSettings->indexCount <= 0 )
+    {
+      removeMQTTSettings( index->mqttSettings );
+    }
+    mi_free( index );
+  }
+}
+
+void columnValueToString( MI_ROW *row, mi_integer index, char *dest )
+{
+  MI_DATUM valueBuffer;
+  mi_integer valueLen = 0;
+  mi_string *stringValue;
+
+  // TODO: Make sure typecasting MI_TYPEID to mi_integer is safe
+  mi_integer columnTypeID = *(mi_integer*)mi_column_type_id( (MI_ROW_DESC*)row , index );
+  // syslog( LOG_INFO, "Column: %d, Type ID: %d\n" , index , *(mi_integer*)columnTypeID );
+
+  mi_integer valueType = mi_value( row ,  index , &valueBuffer , &valueLen );
+  // syslog( LOG_INFO, "Value len: %d\n", valueLen );
+
+  if( valueType == MI_NORMAL_VALUE )
+  {
+    switch( columnTypeID & TYPEIDMASK )
+    {
+      case SQLINT:
+        sprintf( dest, "%d", *(mi_integer*)(&valueBuffer) );
+        break;
+      case SQLMONEY:
+        stringValue = mi_money_to_string( (mi_money*)valueBuffer );
+        strcat( dest , stringValue );
+        mi_free( stringValue );
+        break;
+      case SQLVCHAR:
+        stringValue = mi_lvarchar_to_string( (mi_lvarchar*)valueBuffer );
+        strcat( dest , stringValue );
+        mi_free( stringValue );
+        break;
+      default:
+        syslog( LOG_INFO, "Unknown column type ID: %d\n", columnTypeID );
+        break;
+    }
+  }
+  else
+  {
+    syslog( LOG_INFO, "Unknown value type\n" );
+  }
+}
+
+void rowToCSV( MI_ROW *row, char *dest )
+{
+  char *offset = dest;
+
+  mi_integer numCols = mi_column_count( (MI_ROW_DESC*)row );
+  mi_integer i = 0;
+  for( ; i < numCols; i++ )
+  {
+    columnValueToString( row , i , offset );
+
+    if( i < numCols - 1 ) strcat( offset , "," );
+    offset = strchr( offset , 0 );
+  }
+}
+
+mi_integer am_create( MI_AM_TABLE_DESC *tableDesc )
+{
+  openlog( "InformixSparkStream" , 0, LOG_USER );
+  mi_string *indexName = mi_tab_name( tableDesc );
+  syslog( LOG_INFO, "Index created: %s\n" , indexName );
+
+  return MI_OK;
+}
+
+mi_integer am_drop( MI_AM_TABLE_DESC *tableDesc )
+{
+  openlog( "InformixSparkStream" , 0, LOG_USER );
+  mi_string *indexName = mi_tab_name( tableDesc );
+
+  removeIndex( indexName );
+  syslog( LOG_INFO, "Index dropped: %s\n" , indexName );
+
+  return MI_OK;
+}
+
+mi_integer am_open( MI_AM_TABLE_DESC *tableDesc )
+{
+  return MI_OK;
+}
+
+mi_integer am_close( MI_AM_TABLE_DESC *tableDesc )
+{
+  return MI_OK;
+}
+
+mi_integer am_insert( MI_AM_TABLE_DESC *tableDesc, MI_ROW *row, MI_AM_ROWID_DESC *ridDesc )
+{
+  ISS_Index *index = getIndex( tableDesc );
+  if( !index ) return MI_OK;
+
+  openlog( "InformixSparkStream" , 0, LOG_USER );
+
+  MQTTClient_message msg = MQTTClient_message_initializer;
+  msg.payload = mi_alloc(sizeof(char) * 2048);
+  if( msg.payload == NULL ) return MI_ERROR;
+  memset( msg.payload , 0 , 2048 );
+  strcat( (char*)msg.payload , "i," );
+  rowToCSV( row , strchr( (char*)msg.payload , 0 ) );
+  msg.payloadlen = strlen( msg.payload );
+  msg.qos = 0;
+  msg.retained = 0;
+  MQTTClient_publishMessage( index->mqttSettings->client , index->mqttTopic , &msg , NULL );
+
+  // syslog( LOG_INFO, "Topic: %s\n", mqttTopic );
+  // syslog( LOG_INFO, "Payload: %s\n", (char*)msg.payload );
+  mi_free( msg.payload );
+
+  return MI_OK;
+}
+
+mi_integer am_update( MI_AM_TABLE_DESC *tableDesc,
+                      MI_ROW *oldRow,
+                      MI_AM_ROWID_DESC *oldridDesc,
+                      MI_ROW *newRow,
+                      MI_AM_ROWID_DESC *newridDesc )
+{
+  ISS_Index *index = getIndex( tableDesc );
+  if( !index ) return MI_OK;
+
+  openlog( "InformixSparkStream" , 0, LOG_USER );
+
+  MQTTClient_message msg = MQTTClient_message_initializer;
+  msg.payload = mi_alloc(sizeof(char) * 2048);
+  if( msg.payload == NULL ) return MI_ERROR;
+  memset( msg.payload , 0 , 2048 );
+  strcat( (char*)msg.payload , "u," );
+  rowToCSV( newRow , strchr( (char*)msg.payload , 0 ) );
+  strcat( (char*)msg.payload , "\nu," );
+  rowToCSV( oldRow , strchr( (char*)msg.payload , 0 ) );
+
+  msg.payloadlen = strlen( msg.payload );
+  msg.qos = 0;
+  msg.retained = 0;
+  MQTTClient_publishMessage( index->mqttSettings->client , index->mqttTopic , &msg , NULL );
+
+  // syslog( LOG_INFO, "Topic: %s\n", mqttTopic );
+  // syslog( LOG_INFO, "Payload: %s\n", (char*)msg.payload );
+  mi_free( msg.payload );
+
+  return MI_OK;
+}
+
+mi_integer am_delete( MI_AM_TABLE_DESC *tableDesc, MI_ROW *row, MI_AM_ROWID_DESC *ridDesc )
+{
+  ISS_Index *index = getIndex( tableDesc );
+  if( !index ) return MI_OK;
+
+  openlog( "InformixSparkStream" , 0, LOG_USER );
+
+  MQTTClient_message msg = MQTTClient_message_initializer;
+  msg.payload = mi_alloc(sizeof(char) * 2048);
+  if( msg.payload == NULL ) return MI_ERROR;
+  memset( msg.payload , 0 , 2048 );
+  strcat( (char*)msg.payload , "d," );
+  rowToCSV( row , strchr( (char*)msg.payload , 0 ) );
+  msg.payloadlen = strlen( msg.payload );
+  msg.qos = 0;
+  msg.retained = 0;
+  MQTTClient_publishMessage( index->mqttSettings->client , index->mqttTopic , &msg , NULL );
+
+  // syslog( LOG_INFO, "Topic: %s\n", mqttTopic );
+  // syslog( LOG_INFO, "Payload: %s\n", (char*)msg.payload );
+  mi_free( msg.payload );
+
+  return MI_OK;
+}
+
+mi_integer am_beginscan( MI_AM_SCAN_DESC *scanDesc )
+{
+  return MI_OK;
+}
+
+mi_integer am_getnext( MI_AM_SCAN_DESC *scanDesc, MI_ROW **row, MI_AM_ROWID_DESC *ridDesc )
+{
+  return MI_OK;
+}
+
+mi_integer am_endscan( MI_AM_SCAN_DESC *scanDesc )
+{
+  return MI_OK;
+}
+
+mi_real* am_scancost( MI_AM_TABLE_DESC *tableDesc, MI_AM_QUAL_DESC *qualDesc )
+{
+  if( !constantScanCost )
+  {
+    constantScanCost = (mi_real*)mi_dalloc( sizeof( mi_real ) , PER_SYSTEM );
+    *constantScanCost = -1;
+  }
+
+  return constantScanCost;
+}
+
