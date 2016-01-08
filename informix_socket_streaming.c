@@ -1,5 +1,6 @@
 #include <mi.h>
 #include <miami.h>
+#include <minmprot.h>
 #include <sqltypes.h>
 
 #include <string.h>
@@ -13,9 +14,11 @@
 #include <netinet/in.h>
 #include <errno.h>
 
-#include "MQTTClient.h"
+#include "mqttnet.h"
 
 #define AMPARAM_TOKEN_DELIMITERS " =,"
+#define INDEX_LIST_MEMNAME "ISSIndexList"
+#define MQTT_MAX_PACKET_ID 65535
 
 mi_real *constantScanCost = NULL;
 
@@ -25,17 +28,33 @@ typedef struct _ISS_LinkedList {
 } ISS_LinkedList;
 
 typedef struct {
-  MQTTClient client;
-  char *serverURI;
+  char *host;
+  int port;
+  int refCount;
+} ISS_ServerInfo;
+
+typedef struct {
+  MqttClient *client;
+  ISS_ServerInfo *serverInfo;
   int indexCount;
+  int pid;
 } ISS_MQTTSettings;
 
 typedef struct {
   char *mqttTopic, *indexName;
-  ISS_MQTTSettings *mqttSettings;
+  ISS_ServerInfo *serverInfo;
+  ISS_LinkedList *mqttList;
 } ISS_Index;
 
-ISS_LinkedList *indexList = 0, *mqttList = 0;
+ISS_LinkedList **indexList = NULL;//, *mqttList = NULL;
+int nextMQTTClientID = 0;
+
+int mqttLastPacketID = 0;
+word16 mqttGetNextPacketID()
+{
+  mqttLastPacketID = ( mqttLastPacketID >= MQTT_MAX_PACKET_ID ) ? 1 : mqttLastPacketID + 1;
+  return mqttLastPacketID;
+}
 
 ISS_LinkedList* ISS_LinkedList_remove( ISS_LinkedList *list, ISS_LinkedList *link )
 {
@@ -75,6 +94,14 @@ ISS_LinkedList* ISS_LinkedList_add( ISS_LinkedList *list, ISS_LinkedList *link )
   return link;
 }
 
+ISS_LinkedList* ISS_LinkedList_new( void *payload )
+{
+  ISS_LinkedList *newLink = (ISS_LinkedList*)mi_dalloc( sizeof(ISS_LinkedList) , PER_SYSTEM );
+  newLink->payload = payload;
+  newLink->next = NULL;
+  return newLink;
+}
+
 mi_integer getTableName( mi_string *indexName, char *dest )
 {
   MI_CONNECTION *conn = mi_open( NULL, NULL, NULL );
@@ -99,14 +126,17 @@ mi_integer getTableName( mi_string *indexName, char *dest )
   return MI_OK;
 }
 
-mi_integer getMQTTServerURI( MI_AM_TABLE_DESC *tableDesc, char *serverURI )
+ISS_ServerInfo* getMQTTServerInfo( MI_AM_TABLE_DESC *tableDesc )
 {
   mi_string *params = mi_tab_amparam( tableDesc );
   syslog( LOG_INFO, "AM Params: %s\n", params );
 
+  ISS_ServerInfo *info = NULL;
+
   if( params )
   {
-    char serverHost[128], serverPort[6];
+    char *serverHost = NULL;
+    int serverPort = 0;
     char *paramName = strtok( params, AMPARAM_TOKEN_DELIMITERS );
     char *paramValue = strtok( 0, AMPARAM_TOKEN_DELIMITERS );
     while( paramName )
@@ -114,131 +144,170 @@ mi_integer getMQTTServerURI( MI_AM_TABLE_DESC *tableDesc, char *serverURI )
       if( !paramValue )
       {
         syslog( LOG_INFO, "Missing param value for: %s\n", paramName );
-        return MI_ERROR;
+        break;
       }
 
       if( strcmp( paramName , "host" ) == 0 )
       {
         int len = strlen( paramValue );
-        if( len > 127 ) return MI_ERROR;
-
+        serverHost = (char*)mi_dalloc( len , PER_SYSTEM );
         memcpy( serverHost , paramValue , len );
         serverHost[ len ] = 0;
       }
       else if( strcmp( paramName , "port" ) == 0 )
       {
         int len = strlen( paramValue );
-        if( len > 5 ) return MI_ERROR;
+        if( len > 5 ) break;
 
-        memcpy( serverPort , paramValue , len );
-        serverPort[ len ] = 0;
+        serverPort = atoi( paramValue );
+        if( serverPort < 1 ) break;
       }
       else
       {
         syslog( LOG_INFO, "Unknown parameter name: %s\n", paramName );
-        return MI_ERROR;
+        continue;
       }
 
       paramName = strtok( 0, AMPARAM_TOKEN_DELIMITERS );
       paramValue = strtok( 0, AMPARAM_TOKEN_DELIMITERS );
     }
 
-    sprintf( serverURI , "tcp://%s:%s" , serverHost ,serverPort );
-    syslog( LOG_INFO, "MQTT Server URI: %s\n" , serverURI );
+    if( serverHost && serverPort > 0 )
+    {
+      info = (ISS_ServerInfo*)mi_dalloc( sizeof( ISS_ServerInfo ) , PER_SYSTEM );
+      info->host = serverHost;
+      info->port = serverPort;
+      info->refCount = 0;
+
+      syslog( LOG_INFO, "MQTT Server Info: %s:%d\n", info->host, info->port );
+    }
+    else if( serverHost ) mi_free( serverHost );
   }
   else
   {
     syslog( LOG_INFO, "No parameters supplied.\n" );
-    return MI_ERROR;
+    return NULL;
   }
 
-  return MI_OK;
+  return info;
 }
 
-ISS_MQTTSettings* getMQTTSettings( char *serverURI )
+ISS_MQTTSettings* getMQTTSettings( ISS_ServerInfo *serverInfo )
 {
   ISS_MQTTSettings *settings = NULL;
-  ISS_LinkedList *current = mqttList;
-  while( current != NULL )
+  ISS_LinkedList *currentIndex = *indexList, *currentMQTT = NULL;
+  int pid = getpid();
+  while( currentIndex != NULL )
   {
-    settings = (ISS_MQTTSettings*)current->payload;
-    if( strcmp( settings->serverURI , serverURI ) == 0 ) break;
-    settings = NULL;
-    current = current->next;
+    currentMQTT = ((ISS_Index*)currentIndex->payload)->mqttList;
+    while( currentMQTT != NULL )
+    {
+      settings = (ISS_MQTTSettings*)currentMQTT->payload;
+      if( settings->pid == pid && settings->serverInfo == serverInfo ) break;
+      settings = NULL;
+      currentMQTT = currentMQTT->next;
+    }
+    if( settings ) break;
+    currentIndex = currentIndex->next;
   }
 
   if( settings == NULL )
   {
     settings = (ISS_MQTTSettings*)mi_dalloc( sizeof(ISS_MQTTSettings) , PER_SYSTEM );
+    settings->serverInfo = serverInfo;
     settings->client = NULL;
-    settings->serverURI = serverURI;
     settings->indexCount = 0;
-
-    ISS_LinkedList *newLink = (ISS_LinkedList*)mi_dalloc( sizeof(ISS_LinkedList*) , PER_SYSTEM );
-    newLink->payload = settings;
-    mqttList = ISS_LinkedList_add( mqttList , newLink );
+    settings->pid = pid;
   }
 
   return settings;
 }
 
-void removeMQTTSettings( ISS_MQTTSettings *target )
+void removeMQTTSettings( ISS_MQTTSettings *settings )
 {
-    ISS_MQTTSettings *settings = NULL;
-    ISS_LinkedList *current = mqttList;
-    while( current != NULL )
-    {
-      settings = (ISS_MQTTSettings*)current->payload;
-      if( settings == target ) break;
-      settings = NULL;
-      current = current->next;
-    }
-
     if( settings != NULL )
     {
-      mqttList = ISS_LinkedList_remove( mqttList , current );
-      mi_free( current );
-
-      syslog( LOG_INFO, "Removing MQTT Settings for: %s\n", settings->serverURI );
+      syslog( LOG_INFO, "[%d] Removing MQTT Settings: %d,%s:%d\n", getpid(), settings->pid, settings->serverInfo->host, settings->serverInfo->port );
 
       if( settings->client )
       {
-        if( MQTTClient_isConnected( settings->client ) ) MQTTClient_disconnect( settings->client , 1 );
-        MQTTClient_destroy( &settings->client );
+        if( settings->client->flags & MQTT_CLIENT_FLAG_IS_CONNECTED )
+        {
+          MqttClient_Disconnect( settings->client );
+          MqttClient_NetDisconnect( settings->client );
+        }
+        mi_free( settings->client->tx_buf );
+        mi_free( settings->client->rx_buf );
+        mi_free( settings->client->net );
+        mi_free( settings->client );
       }
-      mi_free( settings->serverURI );
+
+      syslog( LOG_INFO, "[%d] Client disconnected/destroyed...\n", getpid() );
+
       mi_free( settings );
     }
 }
 
 mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
 {
-  if( !mqttSettings->client || !MQTTClient_isConnected( mqttSettings->client ) )
+  if( !mqttSettings->client || ( mqttSettings->client->flags & MQTT_CLIENT_FLAG_IS_CONNECTED ) == 0 )
   {
-    MQTTClient_connectOptions connOpts = MQTTClient_connectOptions_initializer;
-    connOpts.keepAliveInterval = 20;
-    connOpts.cleansession = 1;
-    connOpts.connectTimeout = 1;
+    int rc;
+    MqttConnect connect;
 
     if( !mqttSettings->client )
     {
-      syslog( LOG_INFO, "Creating new MQTT Client...\n" );
-      int rc = MQTTClient_create( &mqttSettings->client , mqttSettings->serverURI , "IfxSparkStream" , MQTTCLIENT_PERSISTENCE_NONE , 0 );
-      if( rc != MQTTCLIENT_SUCCESS )
+      syslog( LOG_INFO , "[%d] MQTT Client does not exist.\n", getpid() );
+
+      MqttNet *net = (MqttNet*)mi_dalloc( sizeof( MqttNet ) , PER_SYSTEM );
+      rc = MqttClientNet_Init( net );
+      if( rc != 0 )
       {
-        syslog( LOG_INFO, "MQTT Client create error code: %d\n" , rc );
+        syslog( LOG_INFO, "[%d] MQTT Net Init failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );
+        mi_free( net );
+        return MI_ERROR;
+      }
+
+      mqttSettings->client = (MqttClient*)mi_dalloc( sizeof( MqttClient ) , PER_SYSTEM );
+      byte *txBuffer = (byte*)mi_dalloc( 1024 , PER_SYSTEM );
+      byte *rxBuffer = (byte*)mi_dalloc( 1024 , PER_SYSTEM );
+
+      rc = MqttClient_Init( mqttSettings->client , net , NULL , txBuffer , 1024 , rxBuffer , 1024 , 1000 );
+      if( rc == 0 ) rc = MqttClient_NetConnect( mqttSettings->client , mqttSettings->serverInfo->host , mqttSettings->serverInfo->port , 5000 , 0 , NULL );
+
+      if( rc != 0 )
+      {
+        syslog( LOG_INFO, "[%d] MQTT Connect failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );
+
+        mi_free( txBuffer );
+        mi_free( rxBuffer );
+        mi_free( mqttSettings->client );
+        mqttSettings->client = NULL;
         return MI_ERROR;
       }
     }
-
-    int rc = MQTTClient_connect( mqttSettings->client , &connOpts );
-    if( rc != MQTTCLIENT_SUCCESS )
+    else
     {
-      syslog( LOG_INFO, "Unable to connect to MQTT server. Error code: %d\n" , rc );
+      syslog( LOG_INFO , "[%d] MQTT Client not connected.\n", getpid() );
+    }
+
+    memset( &connect , 0 , sizeof( MqttConnect ) );
+    connect.keep_alive_sec = 0;
+    connect.clean_session = 1;
+
+    char mqttClientID[32];
+    memset( mqttClientID , 0 , 32 );
+    sprintf( mqttClientID , "iss%d_%d" , getpid(), nextMQTTClientID++ );
+
+    connect.client_id = mqttClientID;
+    rc = MqttClient_Connect( mqttSettings->client , &connect );
+    if( rc != 0 )
+    {
+      syslog( LOG_INFO, "[%d] MQTT Connect failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );
       return MI_ERROR;
     }
 
-    syslog( LOG_INFO, "MQTT Client connected\n" );
+    syslog( LOG_INFO, "[%d] MQTT Client connected\n", getpid() );
   }
 
   return MI_OK;
@@ -246,8 +315,10 @@ mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
 
 ISS_Index* getIndex( MI_AM_TABLE_DESC *tableDesc )
 {
+  if( indexList == NULL ) return NULL;
+
   mi_string *indexName = mi_tab_name( tableDesc );
-  ISS_LinkedList *current = indexList;
+  ISS_LinkedList *current = *indexList;
   ISS_Index *index = NULL;
   while( current != NULL )
   {
@@ -259,38 +330,79 @@ ISS_Index* getIndex( MI_AM_TABLE_DESC *tableDesc )
 
   if( index == NULL )
   {
+    ISS_ServerInfo *serverInfo = getMQTTServerInfo( tableDesc );
+    if( serverInfo == NULL ) return NULL;
+
+    current = *indexList;
+    while( current != NULL )
+    {
+      index = (ISS_Index*)current->payload;
+      if( strcmp( index->serverInfo->host , serverInfo->host ) == 0 && index->serverInfo->port == serverInfo->port )
+      {
+        mi_free( serverInfo->host );
+        mi_free( serverInfo );
+        serverInfo = index->serverInfo;
+        break;
+      }
+      current = current->next;
+    }
+
     int indexNameLen = strlen( indexName );
 
     index = (ISS_Index*)mi_dalloc( sizeof(ISS_Index) , PER_SYSTEM );
     index->mqttTopic = (char*)mi_dalloc( sizeof(char) * 256 , PER_SYSTEM );
+    index->serverInfo = serverInfo;
+    index->serverInfo->refCount++;
     index->indexName = (char*)mi_dalloc( sizeof(char) * ( indexNameLen + 1 ) , PER_SYSTEM );
     memset( index->mqttTopic , 0 , 256 );
     memcpy( index->indexName , indexName , indexNameLen );
     index->indexName[ indexNameLen ] = 0;
     getTableName( indexName , index->mqttTopic );
+    index->mqttList = NULL;
 
-    char *mqttServerURI = (char*)mi_dalloc( sizeof(char) * 256 , PER_SYSTEM );
-    memset( mqttServerURI , 0 , 256 );
-    if( getMQTTServerURI( tableDesc , mqttServerURI ) == MI_ERROR ) return NULL;
-    index->mqttSettings = getMQTTSettings( mqttServerURI );
-    index->mqttSettings->indexCount++;
+    *indexList = ISS_LinkedList_add( *indexList , ISS_LinkedList_new( index ) );
 
-    ISS_LinkedList *newLink = (ISS_LinkedList*)mi_dalloc( sizeof(ISS_LinkedList) , PER_SYSTEM );
-    newLink->payload = index;
-    indexList = ISS_LinkedList_add( indexList , newLink );
-
-    syslog( LOG_INFO, "Added index: %s\n" , ((ISS_Index*)newLink->payload)->indexName );
+    syslog( LOG_INFO, "[%d] Added index: %s\n", getpid(), indexName );
   }
-
-  if( connectMQTTClient( index->mqttSettings ) != MI_OK ) index = NULL;
 
   return index;
 }
 
+ISS_MQTTSettings* getMQTTClient( ISS_Index *index )
+{
+  int pid = getpid();
+  ISS_MQTTSettings *settings = NULL;
+  ISS_LinkedList *current = index->mqttList;
+  while( current != NULL )
+  {
+    settings = (ISS_MQTTSettings*)current->payload;
+    if( settings->pid == pid ) break;
+    settings = NULL;
+    current = current->next;
+  }
+
+  if( settings == NULL )
+  {
+    settings = getMQTTSettings( index->serverInfo );
+    if( settings == NULL ) return NULL;
+
+    settings->indexCount++;
+    index->mqttList = ISS_LinkedList_add( index->mqttList , ISS_LinkedList_new( settings ) );
+  }
+
+  if( connectMQTTClient( settings ) != MI_OK ) return NULL;
+
+  return settings;
+}
+
 void removeIndex( mi_string *indexName )
 {
+  if( indexList == NULL ) return;
+
+  mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
+
   ISS_Index *index = NULL;
-  ISS_LinkedList *current = indexList;
+  ISS_LinkedList *current = *indexList;
   while( current != NULL )
   {
     index = (ISS_Index*)current->payload;
@@ -301,20 +413,47 @@ void removeIndex( mi_string *indexName )
 
   if( index != NULL )
   {
-    indexList = ISS_LinkedList_remove( indexList , current );
+    *indexList = ISS_LinkedList_remove( *indexList , current );
     mi_free( current );
 
-    syslog( LOG_INFO, "Removed index: %s\n", index->indexName );
+    syslog( LOG_INFO, "Removing index: %s\n", index->indexName );
+
+    ISS_MQTTSettings *settings = NULL;
+    ISS_LinkedList *currentMQTT = index->mqttList, *prevMQTT = NULL;
+    while( currentMQTT != NULL )
+    {
+      settings = (ISS_MQTTSettings*)currentMQTT->payload;
+      settings->indexCount--;
+      if( settings->indexCount <= 0 )
+      {
+        removeMQTTSettings( settings );
+      }
+
+      syslog( LOG_INFO, "[%d] Removing MQTT Link...\n", getpid() );
+
+      prevMQTT = currentMQTT;
+      currentMQTT = currentMQTT->next;
+      mi_free( prevMQTT );
+
+      syslog( LOG_INFO, "[%d] Done.\n", getpid() );
+    }
+
+    index->serverInfo->refCount--;
+    if( index->serverInfo->refCount <= 0 )
+    {
+      syslog( LOG_INFO, "[%d] Removing ServerInfo %s:%d\n", getpid(), index->serverInfo->host, index->serverInfo->port );
+      mi_free( index->serverInfo->host );
+      mi_free( index->serverInfo );
+    }
 
     mi_free( index->mqttTopic );
     mi_free( index->indexName );
-    index->mqttSettings->indexCount--;
-    if( index->mqttSettings->indexCount <= 0 )
-    {
-      removeMQTTSettings( index->mqttSettings );
-    }
     mi_free( index );
+
+    syslog( LOG_INFO, "[%d] Index removed.\n", getpid() );
   }
+
+  mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
 }
 
 void columnValueToString( MI_ROW *row, mi_integer index, char *dest )
@@ -395,6 +534,27 @@ mi_integer am_drop( MI_AM_TABLE_DESC *tableDesc )
 
 mi_integer am_open( MI_AM_TABLE_DESC *tableDesc )
 {
+  if( indexList == NULL )
+  {
+    int rc = mi_named_get( INDEX_LIST_MEMNAME, PER_SYSTEM, (void**)&indexList );
+    if( rc == MI_ERROR )
+    {
+      syslog( LOG_INFO, "Error getting indexList.\n" );
+    }
+    if( rc == MI_NO_SUCH_NAME )
+    {
+      rc = mi_named_alloc( sizeof( ISS_LinkedList* ), INDEX_LIST_MEMNAME, PER_SYSTEM, (void**)&indexList );
+      if( rc == MI_ERROR )
+      {
+        syslog( LOG_INFO, "Error allocating indexList.\n" );
+      }
+
+      *indexList = NULL;
+    }
+    // indexList = (ISS_LinkedList**)mi_dalloc( sizeof( ISS_LinkedList* ), PER_SYSTEM );
+    // *indexList = NULL;
+  }
+
   return MI_OK;
 }
 
@@ -405,26 +565,45 @@ mi_integer am_close( MI_AM_TABLE_DESC *tableDesc )
 
 mi_integer am_insert( MI_AM_TABLE_DESC *tableDesc, MI_ROW *row, MI_AM_ROWID_DESC *ridDesc )
 {
-  ISS_Index *index = getIndex( tableDesc );
-  if( !index ) return MI_OK;
-
   openlog( "InformixSparkStream" , 0, LOG_USER );
 
-  MQTTClient_message msg = MQTTClient_message_initializer;
-  msg.payload = mi_alloc(sizeof(char) * 2048);
-  if( msg.payload == NULL ) return MI_ERROR;
-  memset( msg.payload , 0 , 2048 );
-  strcat( (char*)msg.payload , "i," );
-  rowToCSV( row , strchr( (char*)msg.payload , 0 ) );
-  msg.payloadlen = strlen( msg.payload );
-  msg.qos = 0;
-  msg.retained = 0;
-  MQTTClient_publishMessage( index->mqttSettings->client , index->mqttTopic , &msg , NULL );
+  if( indexList == NULL ) return MI_OK;
+  if( mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM ) != MI_OK )
+  {
+    syslog( LOG_INFO, "Error locking memory...\n" );
+    return MI_OK;
+  }
 
-  // syslog( LOG_INFO, "Topic: %s\n", mqttTopic );
-  // syslog( LOG_INFO, "Payload: %s\n", (char*)msg.payload );
-  mi_free( msg.payload );
+  ISS_Index *index;
+  ISS_MQTTSettings *mqtt;
+  char *payload;
 
+  if( ( index = getIndex( tableDesc ) ) == NULL ||
+      ( mqtt = getMQTTClient( index ) ) == NULL ||
+      ( payload = (char*)mi_alloc( sizeof( char ) * 1024 ) ) == NULL )
+  {
+    mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
+    return MI_OK;
+  }
+
+  memset( payload , 0 , 1024 );
+  strcat( payload , "i," );
+  rowToCSV( row , strchr( payload , 0 ) );
+
+  MqttPublish publish;
+  memset( &publish , 0 , sizeof( MqttPublish ) );
+  publish.retain = 0;
+  publish.qos = 0;
+  publish.duplicate = 0;
+  publish.topic_name = index->mqttTopic;
+  publish.buffer = (byte*)payload;
+  publish.total_len = (word16)strlen( payload );
+  publish.packet_id = mqttGetNextPacketID();
+
+  MqttClient_Publish( mqtt->client, &publish );
+  mi_free( payload );
+
+  mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
   return MI_OK;
 }
 
@@ -434,54 +613,91 @@ mi_integer am_update( MI_AM_TABLE_DESC *tableDesc,
                       MI_ROW *newRow,
                       MI_AM_ROWID_DESC *newridDesc )
 {
-  ISS_Index *index = getIndex( tableDesc );
-  if( !index ) return MI_OK;
-
   openlog( "InformixSparkStream" , 0, LOG_USER );
 
-  MQTTClient_message msg = MQTTClient_message_initializer;
-  msg.payload = mi_alloc(sizeof(char) * 2048);
-  if( msg.payload == NULL ) return MI_ERROR;
-  memset( msg.payload , 0 , 2048 );
-  strcat( (char*)msg.payload , "u," );
-  rowToCSV( newRow , strchr( (char*)msg.payload , 0 ) );
-  strcat( (char*)msg.payload , "\nu," );
-  rowToCSV( oldRow , strchr( (char*)msg.payload , 0 ) );
+  if( indexList == NULL ) return MI_OK;
+  if( mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM ) != MI_OK )
+  {
+    syslog( LOG_INFO, "Error locking memory...\n" );
+    return MI_OK;
+  }
 
-  msg.payloadlen = strlen( msg.payload );
-  msg.qos = 0;
-  msg.retained = 0;
-  MQTTClient_publishMessage( index->mqttSettings->client , index->mqttTopic , &msg , NULL );
+  ISS_Index *index;
+  ISS_MQTTSettings *mqtt;
+  char *payload;
 
-  // syslog( LOG_INFO, "Topic: %s\n", mqttTopic );
-  // syslog( LOG_INFO, "Payload: %s\n", (char*)msg.payload );
-  mi_free( msg.payload );
+  if( ( index = getIndex( tableDesc ) ) == NULL ||
+      ( mqtt = getMQTTClient( index ) ) == NULL ||
+      ( payload = (char*)mi_alloc( sizeof( char ) * 1024 ) ) == NULL )
+  {
+    mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
+    return MI_OK;
+  }
 
+  memset( payload , 0 , 1024 );
+  strcat( payload , "u," );
+  rowToCSV( newRow , strchr( payload , 0 ) );
+  strcat( payload , "\nu," );
+  rowToCSV( oldRow , strchr( payload , 0 ) );
+
+  MqttPublish publish;
+  memset( &publish , 0 , sizeof( MqttPublish ) );
+  publish.retain = 0;
+  publish.qos = 0;
+  publish.duplicate = 0;
+  publish.topic_name = index->mqttTopic;
+  publish.buffer = (byte*)payload;
+  publish.total_len = (word16)strlen( payload );
+  publish.packet_id = mqttGetNextPacketID();
+
+  MqttClient_Publish( mqtt->client, &publish );
+  mi_free( payload );
+
+  mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
   return MI_OK;
 }
 
 mi_integer am_delete( MI_AM_TABLE_DESC *tableDesc, MI_ROW *row, MI_AM_ROWID_DESC *ridDesc )
 {
-  ISS_Index *index = getIndex( tableDesc );
-  if( !index ) return MI_OK;
-
   openlog( "InformixSparkStream" , 0, LOG_USER );
 
-  MQTTClient_message msg = MQTTClient_message_initializer;
-  msg.payload = mi_alloc(sizeof(char) * 2048);
-  if( msg.payload == NULL ) return MI_ERROR;
-  memset( msg.payload , 0 , 2048 );
-  strcat( (char*)msg.payload , "d," );
-  rowToCSV( row , strchr( (char*)msg.payload , 0 ) );
-  msg.payloadlen = strlen( msg.payload );
-  msg.qos = 0;
-  msg.retained = 0;
-  MQTTClient_publishMessage( index->mqttSettings->client , index->mqttTopic , &msg , NULL );
+  if( indexList == NULL ) return MI_OK;
+  if( mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM ) != MI_OK )
+  {
+    syslog( LOG_INFO, "Error locking memory...\n" );
+    return MI_OK;
+  }
 
-  // syslog( LOG_INFO, "Topic: %s\n", mqttTopic );
-  // syslog( LOG_INFO, "Payload: %s\n", (char*)msg.payload );
-  mi_free( msg.payload );
+  ISS_Index *index;
+  ISS_MQTTSettings *mqtt;
+  char *payload;
 
+  if( ( index = getIndex( tableDesc ) ) == NULL ||
+      ( mqtt = getMQTTClient( index ) ) == NULL ||
+      ( payload = (char*)mi_alloc( sizeof( char ) * 1024 ) ) == NULL )
+  {
+    mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
+    return MI_OK;
+  }
+
+  memset( payload , 0 , 1024 );
+  strcat( payload , "d," );
+  rowToCSV( row , strchr( payload , 0 ) );
+
+  MqttPublish publish;
+  memset( &publish , 0 , sizeof( MqttPublish ) );
+  publish.retain = 0;
+  publish.qos = 0;
+  publish.duplicate = 0;
+  publish.topic_name = index->mqttTopic;
+  publish.buffer = (byte*)payload;
+  publish.total_len = (word16)strlen( payload );
+  publish.packet_id = mqttGetNextPacketID();
+
+  MqttClient_Publish( mqtt->client, &publish );
+  mi_free( payload );
+
+  mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
   return MI_OK;
 }
 
