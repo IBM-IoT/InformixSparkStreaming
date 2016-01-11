@@ -16,6 +16,12 @@
 
 #include "mqttnet.h"
 
+#ifdef WITH_ISS_DEBUG
+  #define ISSDEBUG(x) x
+#else
+  #define ISSDEBUG(x)
+#endif
+
 #define AMPARAM_TOKEN_DELIMITERS " =,"
 #define INDEX_LIST_MEMNAME "ISSIndexList"
 #define MQTT_MAX_PACKET_ID 65535
@@ -129,7 +135,7 @@ mi_integer getTableName( mi_string *indexName, char *dest )
 ISS_ServerInfo* getMQTTServerInfo( MI_AM_TABLE_DESC *tableDesc )
 {
   mi_string *params = mi_tab_amparam( tableDesc );
-  syslog( LOG_INFO, "AM Params: %s\n", params );
+  ISSDEBUG(syslog( LOG_INFO, "AM Params: %s\n", params );)
 
   ISS_ServerInfo *info = NULL;
 
@@ -143,7 +149,7 @@ ISS_ServerInfo* getMQTTServerInfo( MI_AM_TABLE_DESC *tableDesc )
     {
       if( !paramValue )
       {
-        syslog( LOG_INFO, "Missing param value for: %s\n", paramName );
+        ISSDEBUG(syslog( LOG_INFO, "Missing param value for: %s\n", paramName );)
         break;
       }
 
@@ -164,7 +170,7 @@ ISS_ServerInfo* getMQTTServerInfo( MI_AM_TABLE_DESC *tableDesc )
       }
       else
       {
-        syslog( LOG_INFO, "Unknown parameter name: %s\n", paramName );
+        ISSDEBUG(syslog( LOG_INFO, "Unknown parameter name: %s\n", paramName );)
         continue;
       }
 
@@ -179,13 +185,13 @@ ISS_ServerInfo* getMQTTServerInfo( MI_AM_TABLE_DESC *tableDesc )
       info->port = serverPort;
       info->refCount = 0;
 
-      syslog( LOG_INFO, "MQTT Server Info: %s:%d\n", info->host, info->port );
+      ISSDEBUG(syslog( LOG_INFO, "MQTT Server Info: %s:%d\n", info->host, info->port );)
     }
     else if( serverHost ) mi_free( serverHost );
   }
   else
   {
-    syslog( LOG_INFO, "No parameters supplied.\n" );
+    ISSDEBUG(syslog( LOG_INFO, "No parameters supplied.\n" );)
     return NULL;
   }
 
@@ -227,7 +233,7 @@ void removeMQTTSettings( ISS_MQTTSettings *settings )
 {
     if( settings != NULL )
     {
-      syslog( LOG_INFO, "[%d] Removing MQTT Settings: %d,%s:%d\n", getpid(), settings->pid, settings->serverInfo->host, settings->serverInfo->port );
+      ISSDEBUG(syslog( LOG_INFO, "[%d] Removing MQTT Settings: %d,%s:%d\n", getpid(), settings->pid, settings->serverInfo->host, settings->serverInfo->port );)
 
       if( settings->client )
       {
@@ -242,7 +248,7 @@ void removeMQTTSettings( ISS_MQTTSettings *settings )
         mi_free( settings->client );
       }
 
-      syslog( LOG_INFO, "[%d] Client disconnected/destroyed...\n", getpid() );
+      ISSDEBUG(syslog( LOG_INFO, "[%d] Client disconnected/destroyed...\n", getpid() );)
 
       mi_free( settings );
     }
@@ -257,13 +263,13 @@ mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
 
     if( !mqttSettings->client )
     {
-      syslog( LOG_INFO , "[%d] MQTT Client does not exist.\n", getpid() );
+      ISSDEBUG(syslog( LOG_INFO , "[%d] MQTT Client does not exist.\n", getpid() );)
 
       MqttNet *net = (MqttNet*)mi_dalloc( sizeof( MqttNet ) , PER_SYSTEM );
       rc = MqttClientNet_Init( net );
       if( rc != 0 )
       {
-        syslog( LOG_INFO, "[%d] MQTT Net Init failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );
+        ISSDEBUG(syslog( LOG_INFO, "[%d] MQTT Net Init failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );)
         mi_free( net );
         return MI_ERROR;
       }
@@ -277,7 +283,7 @@ mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
 
       if( rc != 0 )
       {
-        syslog( LOG_INFO, "[%d] MQTT Connect failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );
+        ISSDEBUG(syslog( LOG_INFO, "[%d] MQTT Connect failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );)
 
         mi_free( txBuffer );
         mi_free( rxBuffer );
@@ -288,7 +294,7 @@ mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
     }
     else
     {
-      syslog( LOG_INFO , "[%d] MQTT Client not connected.\n", getpid() );
+      ISSDEBUG(syslog( LOG_INFO , "[%d] MQTT Client not connected.\n", getpid() );)
     }
 
     memset( &connect , 0 , sizeof( MqttConnect ) );
@@ -303,11 +309,11 @@ mi_integer connectMQTTClient( ISS_MQTTSettings *mqttSettings )
     rc = MqttClient_Connect( mqttSettings->client , &connect );
     if( rc != 0 )
     {
-      syslog( LOG_INFO, "[%d] MQTT Connect failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );
+      ISSDEBUG(syslog( LOG_INFO, "[%d] MQTT Connect failed: %s\n", getpid(), MqttClient_ReturnCodeToString( rc ) );)
       return MI_ERROR;
     }
 
-    syslog( LOG_INFO, "[%d] MQTT Client connected\n", getpid() );
+    ISSDEBUG(syslog( LOG_INFO, "[%d] MQTT Client connected\n", getpid() );)
   }
 
   return MI_OK;
@@ -362,7 +368,7 @@ ISS_Index* getIndex( MI_AM_TABLE_DESC *tableDesc )
 
     *indexList = ISS_LinkedList_add( *indexList , ISS_LinkedList_new( index ) );
 
-    syslog( LOG_INFO, "[%d] Added index: %s\n", getpid(), indexName );
+    ISSDEBUG(syslog( LOG_INFO, "[%d] Added index: %s\n", getpid(), indexName );)
   }
 
   return index;
@@ -416,7 +422,7 @@ void removeIndex( mi_string *indexName )
     *indexList = ISS_LinkedList_remove( *indexList , current );
     mi_free( current );
 
-    syslog( LOG_INFO, "Removing index: %s\n", index->indexName );
+    ISSDEBUG(syslog( LOG_INFO, "Removing index: %s\n", index->indexName );)
 
     ISS_MQTTSettings *settings = NULL;
     ISS_LinkedList *currentMQTT = index->mqttList, *prevMQTT = NULL;
@@ -429,19 +435,19 @@ void removeIndex( mi_string *indexName )
         removeMQTTSettings( settings );
       }
 
-      syslog( LOG_INFO, "[%d] Removing MQTT Link...\n", getpid() );
+      ISSDEBUG(syslog( LOG_INFO, "[%d] Removing MQTT Link...\n", getpid() );)
 
       prevMQTT = currentMQTT;
       currentMQTT = currentMQTT->next;
       mi_free( prevMQTT );
 
-      syslog( LOG_INFO, "[%d] Done.\n", getpid() );
+      ISSDEBUG(syslog( LOG_INFO, "[%d] Done.\n", getpid() );)
     }
 
     index->serverInfo->refCount--;
     if( index->serverInfo->refCount <= 0 )
     {
-      syslog( LOG_INFO, "[%d] Removing ServerInfo %s:%d\n", getpid(), index->serverInfo->host, index->serverInfo->port );
+      ISSDEBUG(syslog( LOG_INFO, "[%d] Removing ServerInfo %s:%d\n", getpid(), index->serverInfo->host, index->serverInfo->port );)
       mi_free( index->serverInfo->host );
       mi_free( index->serverInfo );
     }
@@ -450,7 +456,7 @@ void removeIndex( mi_string *indexName )
     mi_free( index->indexName );
     mi_free( index );
 
-    syslog( LOG_INFO, "[%d] Index removed.\n", getpid() );
+    ISSDEBUG(syslog( LOG_INFO, "[%d] Index removed.\n", getpid() );)
   }
 
   mi_unlock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM );
@@ -464,10 +470,10 @@ void columnValueToString( MI_ROW *row, mi_integer index, char *dest )
 
   // TODO: Make sure typecasting MI_TYPEID to mi_integer is safe
   mi_integer columnTypeID = *(mi_integer*)mi_column_type_id( (MI_ROW_DESC*)row , index );
-  // syslog( LOG_INFO, "Column: %d, Type ID: %d\n" , index , *(mi_integer*)columnTypeID );
+  // ISSDEBUG(syslog( LOG_INFO, "Column: %d, Type ID: %d\n" , index , *(mi_integer*)columnTypeID );)
 
   mi_integer valueType = mi_value( row ,  index , &valueBuffer , &valueLen );
-  // syslog( LOG_INFO, "Value len: %d\n", valueLen );
+  // ISSDEBUG(syslog( LOG_INFO, "Value len: %d\n", valueLen );)
 
   if( valueType == MI_NORMAL_VALUE )
   {
@@ -487,13 +493,13 @@ void columnValueToString( MI_ROW *row, mi_integer index, char *dest )
         mi_free( stringValue );
         break;
       default:
-        syslog( LOG_INFO, "Unknown column type ID: %d\n", columnTypeID );
+        ISSDEBUG(syslog( LOG_INFO, "Unknown column type ID: %d\n", columnTypeID );)
         break;
     }
   }
   else
   {
-    syslog( LOG_INFO, "Unknown value type\n" );
+    ISSDEBUG(syslog( LOG_INFO, "Unknown value type\n" );)
   }
 }
 
@@ -514,20 +520,20 @@ void rowToCSV( MI_ROW *row, char *dest )
 
 mi_integer am_create( MI_AM_TABLE_DESC *tableDesc )
 {
-  openlog( "InformixSparkStream" , 0, LOG_USER );
-  mi_string *indexName = mi_tab_name( tableDesc );
-  syslog( LOG_INFO, "Index created: %s\n" , indexName );
+  ISSDEBUG(openlog( "InformixSparkStream" , 0, LOG_USER );)
+  ISSDEBUG(mi_string *indexName = mi_tab_name( tableDesc );)
+  ISSDEBUG(syslog( LOG_INFO, "Index created: %s\n" , indexName );)
 
   return MI_OK;
 }
 
 mi_integer am_drop( MI_AM_TABLE_DESC *tableDesc )
 {
-  openlog( "InformixSparkStream" , 0, LOG_USER );
+  ISSDEBUG(openlog( "InformixSparkStream" , 0, LOG_USER );)
   mi_string *indexName = mi_tab_name( tableDesc );
 
   removeIndex( indexName );
-  syslog( LOG_INFO, "Index dropped: %s\n" , indexName );
+  ISSDEBUG(syslog( LOG_INFO, "Index dropped: %s\n" , indexName );)
 
   return MI_OK;
 }
@@ -539,14 +545,14 @@ mi_integer am_open( MI_AM_TABLE_DESC *tableDesc )
     int rc = mi_named_get( INDEX_LIST_MEMNAME, PER_SYSTEM, (void**)&indexList );
     if( rc == MI_ERROR )
     {
-      syslog( LOG_INFO, "Error getting indexList.\n" );
+      ISSDEBUG(syslog( LOG_INFO, "Error getting indexList.\n" );)
     }
     if( rc == MI_NO_SUCH_NAME )
     {
       rc = mi_named_alloc( sizeof( ISS_LinkedList* ), INDEX_LIST_MEMNAME, PER_SYSTEM, (void**)&indexList );
       if( rc == MI_ERROR )
       {
-        syslog( LOG_INFO, "Error allocating indexList.\n" );
+        ISSDEBUG(syslog( LOG_INFO, "Error allocating indexList.\n" );)
       }
 
       *indexList = NULL;
@@ -565,12 +571,12 @@ mi_integer am_close( MI_AM_TABLE_DESC *tableDesc )
 
 mi_integer am_insert( MI_AM_TABLE_DESC *tableDesc, MI_ROW *row, MI_AM_ROWID_DESC *ridDesc )
 {
-  openlog( "InformixSparkStream" , 0, LOG_USER );
+  ISSDEBUG(openlog( "InformixSparkStream" , 0, LOG_USER );)
 
   if( indexList == NULL ) return MI_OK;
   if( mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM ) != MI_OK )
   {
-    syslog( LOG_INFO, "Error locking memory...\n" );
+    ISSDEBUG(syslog( LOG_INFO, "Error locking memory...\n" );)
     return MI_OK;
   }
 
@@ -613,12 +619,12 @@ mi_integer am_update( MI_AM_TABLE_DESC *tableDesc,
                       MI_ROW *newRow,
                       MI_AM_ROWID_DESC *newridDesc )
 {
-  openlog( "InformixSparkStream" , 0, LOG_USER );
+  ISSDEBUG(openlog( "InformixSparkStream" , 0, LOG_USER );)
 
   if( indexList == NULL ) return MI_OK;
   if( mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM ) != MI_OK )
   {
-    syslog( LOG_INFO, "Error locking memory...\n" );
+    ISSDEBUG(syslog( LOG_INFO, "Error locking memory...\n" );)
     return MI_OK;
   }
 
@@ -659,12 +665,12 @@ mi_integer am_update( MI_AM_TABLE_DESC *tableDesc,
 
 mi_integer am_delete( MI_AM_TABLE_DESC *tableDesc, MI_ROW *row, MI_AM_ROWID_DESC *ridDesc )
 {
-  openlog( "InformixSparkStream" , 0, LOG_USER );
+  ISSDEBUG(openlog( "InformixSparkStream" , 0, LOG_USER );)
 
   if( indexList == NULL ) return MI_OK;
   if( mi_lock_memory( INDEX_LIST_MEMNAME , PER_SYSTEM ) != MI_OK )
   {
-    syslog( LOG_INFO, "Error locking memory...\n" );
+    ISSDEBUG(syslog( LOG_INFO, "Error locking memory...\n" );)
     return MI_OK;
   }
 
