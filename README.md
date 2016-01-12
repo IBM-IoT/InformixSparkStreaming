@@ -1,48 +1,24 @@
 # Informix Socket Streaming
 
-A feature for the Informix database that enables us to stream data that was added to a database through ```INSERT``` 
-and ```UPDATE```(TODO) statements through a TCP socket.
+Informix Socket Streaming is an extension of Informix that allows data to be streamed out of the database as soon as it is inserted, updated, or deleted.
 
-That streaming data can then be consumed by any program that can use sockets as a data source. This is useful for 
-streaming data in real-time to an analytics platform such as Apache Spark.
+The protocol currently used to stream the changes is MQTT v3.1.1 (older versions not supported!). This extension is able to stream data to any MQTT broker where it can be processed or passed on to subscribing clients for processing.
 
-## Compile/Build
+## Build and Install
 
-In the same directory as the ```informix_socket_streaming.c``` file, run the build.sh command. Make sure your 
-```$INFORMIXDIR``` environment variable is the root folder of your Informix installation.
+#### Pre-requisites
+* autoconf, automake, libtool
+* gcc
+* git
 
-This command will create the ```informix_socket_streaming.so``` file that will be used in the following installation
- step.
+#### Build/Install
+To build and install this extension run `setup.sh` in the main directory.
+You need to be logged in as an Informix user and the environment
+variable `$INFORMIXDIR` needs to be set properly
 
-## Install
+This script should retrieve the required libraries using Git, build them,
+build the extension and install it in `$INFORMIXDIR/extend/`
 
-Take the ```informix_socket_streaming.so``` that was created in the previous build step and copy it to the $INFORMIXDIR/extend/
-directory.
+## Now what?
 
-This shared object file contains all the code needed to create the UDRs that will be used in the creation of the 
-secondary access method.
-
-Now run ```create_socket_streaming_virtual_index.sql``` and you will create a secondary access method called
-```informix_socket_streaming```. This is the access method you will use when creating a socket streaming index.
-
-## Using the streaming index
-
-Simply create an index using the ```informix_socket_streaming``` access method on the column whose data you want to 
-stream. Whenever data is inserted into the column, it will then automatically be written to a socket.
-
-```create index socket_stream on table(column_name) USING informix_socket_streaming;```
-
-## Limitations
-
-This feature is still in the early prototype phase and as a result has minimal functionality.
-
-- Only the types INT, DECIMAL and VARCHAR are supported.
-- Only works on INSERT, need to get working with UPDATE as well
-- Can only do one column at a time (?)
-- No way to handle multiple indices
-- Opening/closing of ports is buggy
-- No way to configure which ports to use or output format
-- See TODO.md for more.
-
-
-
+To learn how to use the extension, see the example SQL files in examples/
