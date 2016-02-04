@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <float.h>
 
 #include "mqttnet.h"
 
@@ -479,21 +480,47 @@ void columnValueToString( MI_ROW *row, mi_integer index, char *dest )
   {
     switch( columnTypeID & TYPEIDMASK )
     {
+      case SQLSMINT:
       case SQLINT:
+      case SQLSERIAL:
         sprintf( dest, "%d", *(mi_integer*)(&valueBuffer) );
+        break;
+      case SQLSMFLOAT:
+        sprintf( dest, "%.*f", FLT_DIG, *(mi_real*)valueBuffer );
+        break;
+      case SQLFLOAT:
+        sprintf( dest, "%.*f", DBL_DIG, *(mi_double_precision*)valueBuffer );
         break;
       case SQLMONEY:
         stringValue = mi_money_to_string( (mi_money*)valueBuffer );
         strcat( dest , stringValue );
         mi_free( stringValue );
         break;
-      case SQLVCHAR:
-        stringValue = mi_lvarchar_to_string( (mi_lvarchar*)valueBuffer );
+      case SQLDECIMAL:
+        stringValue = mi_decimal_to_string( (mi_decimal*)valueBuffer );
         strcat( dest , stringValue );
         mi_free( stringValue );
         break;
+      case SQLDATE:
+        stringValue = mi_date_to_string( *(mi_date*)(&valueBuffer) );
+        strcat( dest , stringValue );
+        mi_free( stringValue );
+        break;
+      case SQLDTIME:
+        stringValue = mi_datetime_to_string( (mi_datetime*)valueBuffer );
+        strcat( dest , stringValue );
+        mi_free( stringValue );
+        break;
+      case SQLCHAR:
+      case SQLVCHAR:
+        stringValue = mi_lvarchar_to_string( (mi_lvarchar*)valueBuffer );
+        strcat( dest , "\"" );
+        strcat( dest , stringValue );
+        strcat( dest , "\"" );
+        mi_free( stringValue );
+        break;
       default:
-        ISSDEBUG(syslog( LOG_INFO, "Unknown column type ID: %d\n", columnTypeID );)
+        ISSDEBUG(syslog( LOG_INFO, "Unknown column type ID: %d\n", columnTypeID & TYPEIDMASK );)
         break;
     }
   }
