@@ -1,0 +1,5 @@
+lib/
+wolfMQTT/
+wolfssl/
+*.o
+*.so
