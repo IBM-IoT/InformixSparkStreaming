@@ -70,6 +70,12 @@ create function iss_am_scancost(pointer, pointer)
     external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_scancost)'
     language C;
 
+create function iss_am_truncate(pointer)
+    RETURNING pointer
+    with (not variant, parallelizable)
+    external name '$INFORMIXDIR/extend/informix_socket_streaming.so(am_truncate)'
+    language C;
+
 
 -- Next, create the Secondary Access Method (the Virtual Index Interface)
 
@@ -85,6 +91,7 @@ AM_INSERT = iss_am_insert,
 AM_DELETE = iss_am_delete,
 AM_UPDATE = iss_am_update,
 AM_SCANCOST = iss_am_scancost,
+AM_TRUNCATE = iss_am_truncate,
 AM_SPTYPE = 'A');
 
 -- Finally, create a dummy operator class and set it as the Virtual Index Interface's default.

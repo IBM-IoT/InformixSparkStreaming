@@ -760,3 +760,7 @@ mi_real* am_scancost( MI_AM_TABLE_DESC *tableDesc, MI_AM_QUAL_DESC *qualDesc )
   return constantScanCost;
 }
 
+mi_integer am_truncate( MI_AM_TABLE_DESC *tableDesc )
+{
+  return MI_OK;
+}
