@@ -37,7 +37,7 @@ if [ -z $INFORMIXDIR ]; then
   exit 1
 fi
 
-UDR_INSTALL_PATH=$INFORMIXDIR/extend/informix_socket_streaming.so
+UDR_INSTALL_PATH=$INFORMIXDIR/extend/informix_spark_streaming.so
 if [ -a $UDR_INSTALL_PATH ]; then
   echo "'$UDR_INSTALL_PATH' already exists!"
   exit 1
@@ -166,9 +166,9 @@ echo -e "--------------------------------------\n";
 
 gcc -Wall -fPIC -DMI_SERVBUILD -I$LIB_DIR/include -I$INFORMIXDIR/incl/public -I$INFORMIXDIR/incl -c *.c
 if_cmd_failed
-gcc -Wl,-rpath=$LIB_DIR/lib,-L$LIB_DIR/lib -lwolfssl -lwolfmqtt *.o -shared -o informix_socket_streaming.so
+gcc -Wl,-rpath=$LIB_DIR/lib,-L$LIB_DIR/lib -lwolfssl -lwolfmqtt *.o -shared -o informix_spark_streaming.so
 if_cmd_failed
-cp ./informix_socket_streaming.so $UDR_INSTALL_PATH
+cp ./informix_spark_streaming.so $UDR_INSTALL_PATH
 if_cmd_failed "Unable to copy library to $UDR_INSTALL_PATH"
 
 echo -e "\n--------------------------------------";
