@@ -4,6 +4,9 @@ Informix Spark Streaming is an extension of Informix that allows data to be stre
 
 The protocol currently used to stream the changes is MQTT v3.1.1 (older versions not supported!). This extension is able to stream data to any MQTT broker where it can be processed or passed on to subscribing clients for processing.
 
+#### Value Proposition
+This presentation provides the background and the value proposition of this solution. Along with the use cases across multiple industry sectors, understand the need for fast streaming of data from an Informix database - http://www.slideshare.net/deepind/informix-mqtt-streaming 
+
 ## Build and Install
 
 #### Pre-requisites
