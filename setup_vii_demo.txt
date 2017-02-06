@@ -1,0 +1,36 @@
+# This demo was created and tested on RHEL 7.3 and tested with Informix 12.10.FC7
+
+# NOTES:
+# All commands are ran from the directory in which the VII/MQTT demo has been extracted
+# If cutting and pasting the below commands, the tab characters may need to be removed for
+# the commands to execute properly.
+
+# create the stores_demo database
+	$INFORMIXDIR//bin/dbaccessdemo7
+
+# Compile and install the VII shared library
+	./setup.sh
+
+# Register the Access method into the stores_demo database
+	$INFORMIXDIR/bin/dbaccess stores_demo install.sql
+
+# create some VII indexes
+	$INFORMIXDIR/bin/dbaccess stores_demo create_indexes.sql
+
+# Start the MQTT broker
+# NOTE:
+# For this demo I am using mosquitto MQTT if you are using a different MQTT application substitute
+# the equivelant command(s)
+	/usr/sbin/mosquitto &
+
+# In seperate command windows start your MQTT subscribers
+	/usr/local/bin/mosquitto_sub -t customer -p 1883
+	/usr/local/bin/mosquitto_sub -t orders -p 1883
+
+# Run the VII / MQTT demo script
+	$INFORMIXDIR/bin/dbaccess stores_demo vii-mqtt_demo.sql
+
+# Known limitations:
+# If you have 2 of the informix_socket_streaming VII indexes in different databases that are named the
+# same and you drop one of them the other index will not work until the engine is bounced.
+#
